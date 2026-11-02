@@ -324,6 +324,30 @@ final class SpeechTranscriberTests: XCTestCase {
             "fluid_qwen3-asr-0.6b-int8",
         ])
     }
+
+    func testRemoveArtifactsStripsBracketedTokens() {
+        XCTAssertEqual(SpeechTranscriber.removeArtifacts(from: "hello [BLANK_AUDIO] world"), "hello  world")
+    }
+
+    func testRemoveArtifactsStripsSolePhantomThanks() {
+        XCTAssertEqual(SpeechTranscriber.removeArtifacts(from: "Thank you."), "")
+        XCTAssertEqual(SpeechTranscriber.removeArtifacts(from: "thanks!"), "")
+    }
+
+    func testRemoveArtifactsKeepsThankYouWithContent() {
+        let text = "Tell her the build passed, thank you."
+        XCTAssertEqual(SpeechTranscriber.removeArtifacts(from: text), text)
+    }
+
+    func testRemoveArtifactsCollapsesRepetitionLoops() {
+        let looped = "I think so. Yeah. Yeah. Yeah. Yeah. Yeah."
+        XCTAssertEqual(SpeechTranscriber.removeArtifacts(from: looped), "I think so. Yeah.")
+    }
+
+    func testRemoveArtifactsKeepsSingleRepetition() {
+        let text = "This is friction. This is friction."
+        XCTAssertEqual(SpeechTranscriber.removeArtifacts(from: text), text)
+    }
 }
 
 private actor PipelineTestGate {

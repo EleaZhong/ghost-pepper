@@ -30,12 +30,53 @@ final class SpeechTranscriber {
     }
 
     /// Removes Whisper hallucination artifacts like [BLANK_AUDIO] from text.
+    /// Also strips whole-transcript phantom thank-yous (measured 3/513 archive clips, all
+    /// turbo, all short quiet audio; a clip whose entire content is "Thank you." is a silence
+    /// hallucination) and collapses runs of 3+ identical sentences (decoder repetition loops;
+    /// pairs are kept - two repetitions is emphasis, three is a loop).
     static func removeArtifacts(from text: String) -> String {
         var cleaned = text
         for artifact in artifacts {
             cleaned = cleaned.replacingOccurrences(of: artifact, with: "")
         }
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isSolePhantomThanks(cleaned) {
+            return ""
+        }
+        return collapseImmediateRepeats(in: cleaned)
+    }
+
+    private static let phantomThanksPattern = try! NSRegularExpression(
+        pattern: #"^(thank you|thanks)[.!…\s]*$"#, options: .caseInsensitive
+    )
+
+    static func isSolePhantomThanks(_ text: String) -> Bool {
+        let range = NSRange(text.startIndex..., in: text)
+        return phantomThanksPattern.firstMatch(in: text, range: range) != nil
+    }
+
+    static func collapseImmediateRepeats(in text: String) -> String {
+        let sentencePattern = try! NSRegularExpression(pattern: #"[^.!?]+[.!?]*"#)
+        let range = NSRange(text.startIndex..., in: text)
+        let sentences = sentencePattern.matches(in: text, range: range)
+            .map { String(text[Range($0.range, in: text)!]) }
+        guard sentences.count >= 3 else { return text }
+
+        var out: [String] = []
+        var i = 0
+        while i < sentences.count {
+            let current = sentences[i]
+            let key = current.lowercased().components(separatedBy: .whitespacesAndNewlines).joined()
+            var runEnd = i + 1
+            while runEnd < sentences.count {
+                let nextKey = sentences[runEnd].lowercased().components(separatedBy: .whitespacesAndNewlines).joined()
+                guard nextKey == key else { break }
+                runEnd += 1
+            }
+            out.append(current)  // a run of any length keeps its first sentence
+            i = runEnd >= i + 3 ? runEnd : i + 1  // 3+ identical: skip the loop; 1-2: keep as said
+        }
+        return out.map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
     }
 
     /// Transcribes a 16 kHz mono PCM float audio buffer into text.
