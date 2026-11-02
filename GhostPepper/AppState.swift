@@ -141,6 +141,7 @@ class AppState: ObservableObject {
     enum PipelineOwner {
         case liveRecording
         case transcriptionLab
+        case queuedProcessing
     }
 
     typealias CleanupResult = (
@@ -485,16 +486,6 @@ class AppState: ObservableObject {
                 self?.activePerformanceTrace?.micColdAt = Date()
             }
         }
-        self.textPaster.onPasteStart = { [weak self] in
-            Task { @MainActor in
-                self?.activePerformanceTrace?.pasteStartAt = Date()
-            }
-        }
-        self.textPaster.onPasteEnd = { [weak self] in
-            Task { @MainActor in
-                self?.completeActivePerformanceTraceIfNeeded()
-            }
-        }
         self.postPasteLearningCoordinator.onLearnedCorrection = { [weak overlay] replacement in
             Task { @MainActor in
                 overlay?.show(message: .learnedCorrection(replacement))
@@ -804,14 +795,16 @@ class AppState: ObservableObject {
         }
     }
 
-    private var isTranscribing = false
+    /// Clips process serially in recording order off the recording path: a new recording
+    /// may start while earlier clips are still transcribing (task:ordered-paste-queue).
+    let processingQueue = ProcessingQueue()
 
+    /// Stop the recorder and return to .ready immediately; the clip transcribes, cleans up
+    /// and pastes from the serial processing queue, so recording never waits on the model.
     private func stopRecordingAndTranscribe() async {
-        guard status == .recording, !isTranscribing else { return }
-        isTranscribing = true
-        defer { isTranscribing = false }
+        guard status == .recording else { return }
 
-        debugLogStore.record(category: .hotkey, message: "Recording stopped. Starting transcription.")
+        debugLogStore.record(category: .hotkey, message: "Recording stopped. Queuing transcription.")
         let buffer = await audioRecorder.stopRecording()
         let recordingSessionCoordinator = activeRecordingSessionCoordinator
         let recordingTranscriptionSession = activeRecordingTranscriptionSession
@@ -819,9 +812,13 @@ class AppState: ObservableObject {
         soundEffects.playStop()
         mediaPlaybackController.resumeIfPaused()
         isRecording = false
-        status = .transcribing
+        status = .ready
+        releasePipeline(owner: .liveRecording)
         overlay.show(message: .transcribing)
-        activePerformanceTrace?.transcriptionStartAt = Date()
+        let trace = activePerformanceTrace
+        trace?.transcriptionStartAt = Date()
+        activePerformanceTrace = nil
+        let cleanupAttemptedAtStart = cleanupEnabled && canAttemptCleanup
         let windowContextProvider: WindowContextProvider?
         if frontmostWindowContextEnabled {
             windowContextProvider = { [weak self] in
@@ -831,34 +828,41 @@ class AppState: ObservableObject {
             windowContextProvider = nil
         }
 
-        let didProduceTranscript = await processRecordingResult(
-            audioBuffer: buffer,
-            recordingSessionCoordinator: recordingSessionCoordinator,
-            recordingTranscriptionSession: recordingTranscriptionSession,
-            archivedWindowContext: nil,
-            windowContextProvider: windowContextProvider,
-            shouldPaste: true,
-            shouldRecordDebugSnapshot: true
-        )
-
-        if didProduceTranscript {
-            usageStats.record(.dictation)
-            overlay.dismiss(ifShowing: .transcribing)
-            overlay.dismiss(ifShowing: .cleaningUp)
-        } else {
-            switch Self.emptyTranscriptionDisposition(forAudioSampleCount: buffer.count) {
-            case .cancel:
-                overlay.dismiss()
-                debugLogStore.record(category: .model, message: "Empty transcription cancelled after a short recording.")
-            case .showNoSoundDetected:
-                overlay.show(message: .noSoundDetected)
-                debugLogStore.record(category: .model, message: "No sound detected. Check mic in Settings → Recording.")
+        await processingQueue.enqueue { [weak self] in
+            guard let self else { return }
+            await MainActor.run { _ = self.acquirePipeline(for: .queuedProcessing) }
+            defer {
+                Task { @MainActor in self.releasePipeline(owner: .queuedProcessing) }
             }
-            completeActivePerformanceTraceIfNeeded()
-        }
+            let didProduceTranscript = await self.processRecordingResult(
+                audioBuffer: buffer,
+                recordingSessionCoordinator: recordingSessionCoordinator,
+                recordingTranscriptionSession: recordingTranscriptionSession,
+                archivedWindowContext: nil,
+                windowContextProvider: windowContextProvider,
+                shouldPaste: true,
+                shouldRecordDebugSnapshot: true,
+                trace: trace
+            )
 
-        status = .ready
-        releasePipeline(owner: .liveRecording)
+            await MainActor.run {
+                if didProduceTranscript {
+                    self.usageStats.record(.dictation)
+                    self.overlay.dismiss(ifShowing: .transcribing)
+                    self.overlay.dismiss(ifShowing: .cleaningUp)
+                } else {
+                    switch Self.emptyTranscriptionDisposition(forAudioSampleCount: buffer.count) {
+                    case .cancel:
+                        self.overlay.dismiss(ifShowing: .transcribing)
+                        self.debugLogStore.record(category: .model, message: "Empty transcription cancelled after a short recording.")
+                    case .showNoSoundDetected:
+                        self.overlay.show(message: .noSoundDetected)
+                        self.debugLogStore.record(category: .model, message: "No sound detected. Check mic in Settings.")
+                    }
+                }
+                self.completePerformanceTraceIfNeeded(trace, cleanupAttempted: cleanupAttemptedAtStart)
+            }
+        }
     }
 
     func finishRecordingForTesting(
@@ -886,7 +890,8 @@ class AppState: ObservableObject {
         archivedWindowContext: OCRContext?,
         windowContextProvider: WindowContextProvider?,
         shouldPaste: Bool,
-        shouldRecordDebugSnapshot: Bool
+        shouldRecordDebugSnapshot: Bool,
+        trace: PerformanceTrace? = nil
     ) async -> Bool {
         let transcriptionResult = await transcribedTextForRecording(
             audioBuffer,
@@ -906,11 +911,11 @@ class AppState: ObservableObject {
                 speakerFilteringRan: transcriptionResult.speakerFilteringRan,
                 diarizationSummary: transcriptionResult.diarizationSummary
             )
-            activePerformanceTrace?.transcriptionEndAt = Date()
+            trace?.transcriptionEndAt = Date()
             return false
         }
 
-        activePerformanceTrace?.transcriptionEndAt = Date()
+        trace?.transcriptionEndAt = Date()
         var windowContext = archivedWindowContext
         if cleanupEnabled && canAttemptCleanup {
             activeCleanupAttempted = true
@@ -918,10 +923,9 @@ class AppState: ObservableObject {
                windowContext == nil,
                let resolvedWindowContext = await windowContextProvider?() {
                 windowContext = resolvedWindowContext.context
-                activePerformanceTrace?.ocrCaptureDuration = resolvedWindowContext.elapsed
+                trace?.ocrCaptureDuration = resolvedWindowContext.elapsed
             }
-            activePerformanceTrace?.cleanupStartAt = Date()
-            status = .cleaningUp
+            trace?.cleanupStartAt = Date()
             if shouldPaste {
                 overlay.show(message: .cleaningUp)
             }
@@ -936,7 +940,7 @@ class AppState: ObservableObject {
         let finalText = cleanupResult.text
         activeCleanupAttempted = cleanupResult.attemptedCleanup
         if cleanupResult.attemptedCleanup {
-            activePerformanceTrace?.cleanupEndAt = Date()
+            trace?.cleanupEndAt = Date()
         }
 
         await archiveRecordingForLab(
@@ -960,7 +964,9 @@ class AppState: ObservableObject {
         }
 
         if shouldPaste {
+            trace?.pasteStartAt = Date()
             let pasteResult = textPaster.paste(text: taggedForPaste(finalText))
+            trace?.pasteEndAt = Date()
             if pasteResult == .copiedToClipboard {
                 showClipboardFallbackMessage()
             }
@@ -1371,8 +1377,8 @@ class AppState: ObservableObject {
         activeCleanupAttempted = false
     }
 
-    private func completeActivePerformanceTraceIfNeeded() {
-        guard var trace = activePerformanceTrace else {
+    private func completePerformanceTraceIfNeeded(_ trace: PerformanceTrace?, cleanupAttempted: Bool) {
+        guard let trace else {
             return
         }
 
@@ -1385,12 +1391,14 @@ class AppState: ObservableObject {
             message: trace.summary(
                 speechModelID: speechModel,
                 cleanupBackend: cleanupBackend,
-                cleanupAttempted: activeCleanupAttempted
+                cleanupAttempted: cleanupAttempted
             )
         )
 
-        activePerformanceTrace = nil
-        activeCleanupAttempted = false
+        if activePerformanceTrace === trace {
+            activePerformanceTrace = nil
+            activeCleanupAttempted = false
+        }
         recordingOCRPrefetch.cancel()
     }
 
@@ -1906,10 +1914,8 @@ class AppState: ObservableObject {
 
     private var isSpeechAnalyzerSessionActive: Bool {
         isRecording
-            || isTranscribing
             || status == .recording
-            || status == .transcribing
-            || pipelineOwner != nil
+            || pipelineOwner != nil  // includes queued background processing
     }
 
     private func waitForSpeechAnalyzerSessionToBecomeIdle() async {
@@ -1957,7 +1963,7 @@ class AppState: ObservableObject {
     }
 
     private var shouldClearLiveRecordingNoInputErrorAfterAudioReset: Bool {
-        status == .error && !isRecording && !isTranscribing && Self.isLiveRecordingNoInputError(errorMessage)
+        status == .error && !isRecording && Self.isLiveRecordingNoInputError(errorMessage)
     }
 
     private static func isLiveRecordingNoInputError(_ message: String?) -> Bool {
