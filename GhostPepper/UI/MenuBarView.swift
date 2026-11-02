@@ -12,28 +12,8 @@ struct MenuBarView: View {
                 appState.showSettings()
             }
 
-            if appState.pepperChatEnabled {
-                Button("Context Bundler...") {
-                    appState.showPepperChat()
-                }
-            }
-
             Button("Debug Log...") {
                 appState.showDebugLog()
-            }
-
-            if appState.meetingTranscriptEnabled {
-                Divider()
-
-                Button("IDE...") {
-                    appState.showOrCreateMeetingWindow()
-                }
-
-                if appState.activeMeetingSession != nil {
-                    Button("Stop Meeting") {
-                        appState.stopMeetingTranscription()
-                    }
-                }
             }
 
             Text("Ghost Pepper v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")

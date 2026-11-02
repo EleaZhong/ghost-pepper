@@ -1,135 +1,28 @@
-<div align="center">
+# Ghost Pepper (personal instrument)
 
-<img src="./app-icon.png" width="80" alt="Ghost Pepper">
+Personal voice dictation for macOS, stripped to the core: hold a key, talk, get text
+pasted where your cursor is. 100% on-device.
 
-# Ghost Pepper
+Forked from [matthartman/ghost-pepper](https://github.com/matthartman/ghost-pepper)
+(MIT). This is a pure personal mod: the meetings, second-brain/wiki, QA, chat, and
+cloud-integration subsystems were removed; what remains is the dictation core plus
+the transcription lab.
 
-**100% private** on-device voice models for speech-to-text and meeting transcription on macOS. No cloud APIs, no data leaves your machine.
-
-<a href="https://github.com/matthartman/ghost-pepper/releases/latest/download/GhostPepper.dmg">
-  <img src="https://img.shields.io/badge/Download_for_Mac-FF6600?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac" height="40">
-</a>
-
-macOS 14.0+ · Apple Silicon (M1+) · Free & open source
-
-[![GitHub stars](https://img.shields.io/github/stars/matthartman/ghost-pepper?style=social)](https://github.com/matthartman/ghost-pepper)
-&nbsp;
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-&nbsp;
-![100% Local](https://img.shields.io/badge/100%25-Local-FF6600)
-&nbsp;
-![50+ Languages](https://img.shields.io/badge/50%2B-Languages-blue)
-
-</div>
-
-## Features
+## What it does
 
 - **Hold Control to talk** — release to transcribe and paste into any text field
-- **Meeting transcription** — record calls with notes, transcript, and AI-generated summaries saved as markdown
-- **Runs entirely on your Mac** — models run locally via Apple Silicon, nothing is sent anywhere
-- **Smart cleanup** — local LLM removes filler words and handles self-corrections
-- **Menu bar app** — lives in your menu bar, no dock icon, launches at login
-- **Customizable** — edit the cleanup prompt, pick your mic, toggle features on/off
+- **Local speech models** via WhisperKit / FluidAudio / MLX — nothing leaves the machine
+- **Cleanup pass** — a local LLM removes fillers and resolves self-corrections
+- **Vocabulary glossary** — your terms feed decoding (promptTokens), cleanup hints, and OCR
+- **Transcription lab** — an append-only archive of every dictation (audio + text + timings);
+  the raw material for evaluating models against your own voice
 
-## How it works
+## Presets, not knobs
 
-Ghost Pepper uses open-source models that run entirely on your Mac. Models download automatically and are cached locally.
+Configuration ships as baked presets born from measurement (see the voice-eval harness);
+the only switches are the preset, the microphone, and the voice tag.
 
-### Speech models
+## Build
 
-| Model | Size | Best for |
-|---|---|---|
-| Whisper tiny.en | ~75 MB | Fastest, English only |
-| **Whisper small.en** (default) | ~466 MB | Best accuracy, English only |
-| Whisper small (multilingual) | ~466 MB | Multi-language support |
-| Whisper large-v3 turbo (8-bit) | ~632 MB | Highest English accuracy, multilingual |
-| Parakeet v3 (25 languages) | ~1.4 GB | Multi-language via [FluidAudio](https://github.com/FluidInference/FluidAudio) |
-| Qwen3-ASR 0.6B int8 (50+ languages) | ~900 MB | Highest multilingual quality, macOS 15+ required |
-| Nemotron Speech Streaming 0.6B 8-bit | ~633 MB | Low-latency English streaming via [MLX Audio](https://github.com/Blaizzy/mlx-audio-swift) |
-| Nemotron 3.5 ASR Streaming 0.6B 8-bit | ~721 MB | Low-latency multilingual streaming via [MLX Audio](https://github.com/Blaizzy/mlx-audio-swift) |
-
-### Cleanup models
-
-| Model | Size | Speed |
-|---|---|---|
-| **Qwen 3.5 0.8B** (default) | ~535 MB | Very fast (~1-2s) |
-| Qwen 3.5 2B | ~1.3 GB | Fast (~4-5s) |
-| Qwen 3.5 4B | ~2.8 GB | Full quality (~5-7s) |
-
-Speech models powered by [WhisperKit](https://github.com/argmaxinc/WhisperKit), [FluidAudio](https://github.com/FluidInference/FluidAudio), and [MLX Audio](https://github.com/Blaizzy/mlx-audio-swift). Cleanup models powered by [LLM.swift](https://github.com/eastriverlee/LLM.swift). All models served by [Hugging Face](https://huggingface.co/).
-
-## Getting started
-
-**Download the app:**
-1. Download [GhostPepper.dmg](https://github.com/matthartman/ghost-pepper/releases/latest/download/GhostPepper.dmg)
-2. Open the DMG, drag Ghost Pepper to Applications
-3. Grant Microphone and Accessibility permissions when prompted
-4. Hold Control and speak
-
-> **"Apple could not verify" warning?** On macOS Sequoia, you may see a Gatekeeper warning the first time you open the app. Go to **System Settings > Privacy & Security**, scroll down, and click **Open Anyway** next to the Ghost Pepper message. Click **Confirm** in the popup. You only need to do this once.
-
-**Build from source:**
-1. Clone the repo
-2. Open `GhostPepper.xcodeproj` in Xcode
-3. Build and run (Cmd+R)
-
-## Permissions
-
-| Permission | Why |
-|---|---|
-| Microphone | Record your voice |
-| Accessibility | Global hotkey and paste via simulated keystrokes |
-
-## Privacy audit
-
-Every core feature runs 100% on your Mac — verified by AI code review. No trust required, just point Claude at the repo and ask.
-
-| Feature | Status | What was checked |
-|---|---|---|
-| Speech-to-text | :white_check_mark: Local | WhisperKit/FluidAudio/MLX Audio inference, no audio sent anywhere |
-| Text cleanup | :white_check_mark: Local | Qwen LLM runs on-device via LLM.swift |
-| Audio recording | :white_check_mark: Local | AVAudioEngine + ScreenCaptureKit, no streaming |
-| Meeting transcription & storage | :white_check_mark: Local | Chunked transcription, markdown files on disk |
-| Summary generation | :white_check_mark: Local | Local LLM summarization, no cloud API |
-| OCR & screen capture | :white_check_mark: Local | Apple Vision framework, on-device |
-| File storage | :white_check_mark: Local | Markdown to local filesystem, no cloud sync |
-| Analytics & telemetry | :white_check_mark: Local | Local-only usage counters (UserDefaults) power the in-app Usage report panel. No Firebase, Mixpanel, Sentry, or any tracking SDK. |
-
-**Optional cloud features** (disabled by default, require your own API keys): Zo AI chat, Trello integration, Granola meeting import. Model downloads are one-time from Hugging Face.
-
-> **Verify it yourself:** run `cat PRIVACY_AUDIT.md` in Claude Code and ask it to review the codebase against the audit prompt. The [full audit](PRIVACY_AUDIT.md) includes the exact prompt and detailed file-level results.
-
-## Good to know
-
-- **Launch at login** is enabled by default on first run. You can toggle it off in Settings.
-- **Everything stays local** — transcription history and recordings are stored on your Mac only. Nothing is sent to the cloud. You can clear history anytime in Settings.
-
-## Acknowledgments
-
-Built with [WhisperKit](https://github.com/argmaxinc/WhisperKit), [LLM.swift](https://github.com/eastriverlee/LLM.swift), [Hugging Face](https://huggingface.co/), and [Sparkle](https://sparkle-project.org/).
-
-## License
-
-MIT
-
-## Why "Ghost Pepper"?
-
-All models run locally, no private data leaves your computer. And it's spicy to offer something for free that other apps have raised $80M to build.
-
-## Enterprise / managed devices
-
-Ghost Pepper requires Accessibility permission, which normally needs admin access to grant. On managed devices, IT admins can pre-approve this via an MDM profile (Jamf, Kandji, Mosaic, etc.) using a Privacy Preferences Policy Control (PPPC) payload:
-
-| Field | Value |
-|---|---|
-| Bundle ID | Use the signed app's bundle identifier |
-| Team ID | Use the signing team's Apple Developer team ID |
-| Permission | Accessibility (`com.apple.security.accessibility`) |
-
----
-
-<div align="center">
-
-Questions or deployment issues: open an issue or use your team's internal support channel.
-
-</div>
+Open `GhostPepper.xcodeproj` and build (Cmd+R). Needs `Config/LocalSigning.xcconfig`
+with your `DEVELOPMENT_TEAM` (see the example file).

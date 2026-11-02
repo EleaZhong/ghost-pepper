@@ -82,27 +82,6 @@ private final class AppStateSpeechAnalyzerStub: SpeechAnalyzerTranscribing {
 }
 
 @MainActor
-private final class MeetingSpeechAnalyzerStub: SpeechAnalyzerTranscribing {
-    func transcribe(audioBuffer: [Float]) async throws -> String? {
-        "late audio"
-    }
-}
-
-private final class FakeMeetingAudioCapture: MeetingAudioCapturing {
-    var onAudioChunk: ((TaggedAudioChunk) -> Void)?
-    var onStop: (() -> Void)?
-
-    func start() async throws {}
-
-    func stop() async -> (micBuffer: [Float], systemBuffer: [Float]) {
-        onStop?()
-        return ([], [])
-    }
-
-    var elapsed: TimeInterval { 0 }
-}
-
-@MainActor
 private final class AsyncTestGate {
     private var isReleased = false
 
@@ -127,23 +106,6 @@ final class GhostPepperTests: XCTestCase {
     private static let usageStatsBackfillKey = "usageStats.backfill.v2"
     private static var previousUsageStatsBackfillValue: Any?
 
-    private let pepperChatAppStorageKeys = [
-        "pepperChatEnabled",
-        "pepperChatApiKey"
-    ]
-    private let pepperChatKeychainKeys = [
-        "pepperChatApiKey"
-    ]
-
-    override class func setUp() {
-        super.setUp()
-        let defaults = UserDefaults.standard
-        previousUsageStatsBackfillValue = defaults.object(forKey: usageStatsBackfillKey)
-        // AppState startup backfill scans the user's Documents directory. The
-        // app-state tests use temporary fixtures, so skip that disk scan here
-        // to keep XCTest from prompting for TCC access to Documents.
-        defaults.set(true, forKey: usageStatsBackfillKey)
-    }
 
     override class func tearDown() {
         let defaults = UserDefaults.standard
@@ -182,81 +144,7 @@ final class GhostPepperTests: XCTestCase {
         }
     }
 
-    private func withClearedPepperChatAppStorage<T>(
-        _ body: () throws -> T
-    ) rethrows -> T {
-        let defaults = UserDefaults.standard
-        let originalValues = pepperChatAppStorageKeys.map { key in
-            (key, defaults.object(forKey: key))
-        }
-        let originalKeychainValues = pepperChatKeychainKeys.map { key in
-            (key, KeychainHelper.get(key))
-        }
 
-        for key in pepperChatAppStorageKeys {
-            defaults.removeObject(forKey: key)
-        }
-        for key in pepperChatKeychainKeys {
-            KeychainHelper.delete(key)
-        }
-
-        defer {
-            for (key, value) in originalValues {
-                if let value {
-                    defaults.set(value, forKey: key)
-                } else {
-                    defaults.removeObject(forKey: key)
-                }
-            }
-            for (key, value) in originalKeychainValues {
-                if let value {
-                    _ = KeychainHelper.set(value, for: key)
-                } else {
-                    KeychainHelper.delete(key)
-                }
-            }
-        }
-
-        return try body()
-    }
-
-    private func withClearedPepperChatAppStorage<T>(
-        _ body: () async throws -> T
-    ) async rethrows -> T {
-        let defaults = UserDefaults.standard
-        let originalValues = pepperChatAppStorageKeys.map { key in
-            (key, defaults.object(forKey: key))
-        }
-        let originalKeychainValues = pepperChatKeychainKeys.map { key in
-            (key, KeychainHelper.get(key))
-        }
-
-        for key in pepperChatAppStorageKeys {
-            defaults.removeObject(forKey: key)
-        }
-        for key in pepperChatKeychainKeys {
-            KeychainHelper.delete(key)
-        }
-
-        defer {
-            for (key, value) in originalValues {
-                if let value {
-                    defaults.set(value, forKey: key)
-                } else {
-                    defaults.removeObject(forKey: key)
-                }
-            }
-            for (key, value) in originalKeychainValues {
-                if let value {
-                    _ = KeychainHelper.set(value, for: key)
-                } else {
-                    KeychainHelper.delete(key)
-                }
-            }
-        }
-
-        return try await body()
-    }
 
     override func tearDown() {
         PermissionChecker.current = PermissionChecker.defaultClient
@@ -456,35 +344,6 @@ final class GhostPepperTests: XCTestCase {
         await initialLoad.value
     }
 
-    func testMeetingStopDrainsAudioDeliveredWhileCaptureStops() async throws {
-        guard #available(macOS 26, *) else {
-            throw XCTSkip("SpeechAnalyzer requires macOS 26 or later.")
-        }
-
-        let manager = ModelManager(
-            modelName: SpeechModelCatalog.speechAnalyzer.id,
-            speechAnalyzerBackendFactory: { _ in MeetingSpeechAnalyzerStub() }
-        )
-        await manager.loadModel(name: SpeechModelCatalog.speechAnalyzer.id)
-        let capture = FakeMeetingAudioCapture()
-        let session = MeetingSession(
-            meetingName: "Late audio",
-            transcriber: SpeechTranscriber(modelManager: manager),
-            saveDirectory: FileManager.default.temporaryDirectory,
-            capture: capture
-        )
-        capture.onStop = { [weak capture] in
-            capture?.onAudioChunk?(
-                TaggedAudioChunk(source: .mic, samples: [0.25], timestamp: 0)
-            )
-        }
-
-        try await session.start()
-        await session.stop()
-
-        await waitForCondition { session.transcript.segments.count == 1 }
-        XCTAssertEqual(session.transcript.segments.first?.text, "late audio")
-    }
 
     func testAppStateGatesRecordingWhileSpeechAnalyzerReloads() async throws {
         guard #available(macOS 26, *) else {
@@ -527,52 +386,6 @@ final class GhostPepperTests: XCTestCase {
         XCTAssertEqual(appState.status, .ready)
     }
 
-    func testAppStateDoesNotStartPepperChatDuringSpeechAnalyzerReload() async throws {
-        guard #available(macOS 26, *) else {
-            throw XCTSkip("SpeechAnalyzer requires macOS 26 or later.")
-        }
-
-        try await withClearedPepperChatAppStorage {
-            var factoryCallCount = 0
-            let reloadGate = AsyncTestGate()
-            let manager = ModelManager(
-                modelName: SpeechModelCatalog.speechAnalyzer.id,
-                speechAnalyzerBackendFactory: { _ in
-                    factoryCallCount += 1
-                    if factoryCallCount == 2 {
-                        await reloadGate.wait()
-                    }
-                    return AppStateSpeechAnalyzerStub()
-                }
-            )
-            defer { reloadGate.release() }
-            let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-            defaults.removePersistentDomain(forName: #function)
-            let appState = AppState(
-                hotkeyMonitor: FakeHotkeyMonitor(),
-                chordBindingStore: ChordBindingStore(defaults: defaults),
-                cleanupSettingsDefaults: defaults,
-                modelManager: manager
-            )
-            appState.pepperChatEnabled = true
-            appState.pepperChatApiKey = "test-key"
-            appState.speechModel = SpeechModelCatalog.speechAnalyzer.id
-            appState.preferredLanguage = "en"
-            await appState.loadSpeechModel(name: SpeechModelCatalog.speechAnalyzer.id)
-            appState.status = .ready
-
-            appState.preferredLanguage = "fr"
-            let reload = Task { await appState.reloadSpeechAnalyzerForPreferredLanguageIfNeeded() }
-            await waitForCondition { factoryCallCount >= 2 }
-
-            appState.beginPepperChatRecording()
-
-            XCTAssertFalse(appState.pepperChatSession.isRecording)
-
-            reloadGate.release()
-            await reload.value
-        }
-    }
 
     func testAppStatePreservesUnrelatedErrorWhileReloadingSpeechAnalyzer() async throws {
         guard #available(macOS 26, *) else {
@@ -781,248 +594,11 @@ final class GhostPepperTests: XCTestCase {
         XCTAssertEqual(appState.status, .ready)
     }
 
-    func testAppStateWaitsForActiveMeetingSessionBeforeReloadingSpeechAnalyzer() async throws {
-        guard #available(macOS 26, *) else {
-            throw XCTSkip("SpeechAnalyzer requires macOS 26 or later.")
-        }
-        var factoryCallCount = 0
-        let reloadGate = AsyncTestGate()
-        let manager = ModelManager(
-            modelName: SpeechModelCatalog.speechAnalyzer.id,
-            speechAnalyzerBackendFactory: { _ in
-                factoryCallCount += 1
-                if factoryCallCount == 2 {
-                    await reloadGate.wait()
-                }
-                return AppStateSpeechAnalyzerStub()
-            }
-        )
-        defer { reloadGate.release() }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults,
-            modelManager: manager
-        )
-        appState.speechModel = SpeechModelCatalog.speechAnalyzer.id
-        appState.preferredLanguage = "en"
-        await appState.loadSpeechModel(name: SpeechModelCatalog.speechAnalyzer.id)
-        appState.status = .ready
 
-        let meetingSession = MeetingSession(
-            meetingName: "Test meeting",
-            transcriber: appState.transcriber,
-            saveDirectory: FileManager.default.temporaryDirectory
-        )
-        meetingSession.isActive = true
-        appState.activeMeetingSession = meetingSession
-        appState.preferredLanguage = "fr"
 
-        let reload = Task { await appState.reloadSpeechAnalyzerForPreferredLanguageIfNeeded() }
-        try await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(factoryCallCount, 1)
-        XCTAssertEqual(appState.status, .ready)
 
-        meetingSession.isActive = false
-        await waitForCondition { factoryCallCount >= 2 }
-        XCTAssertEqual(appState.status, .loading)
 
-        reloadGate.release()
-        await reload.value
-        XCTAssertEqual(appState.status, .ready)
-    }
-
-    func testAppStateWaitsForMeetingSessionStartupBeforeReloadingSpeechAnalyzer() async throws {
-        guard #available(macOS 26, *) else {
-            throw XCTSkip("SpeechAnalyzer requires macOS 26 or later.")
-        }
-        var factoryCallCount = 0
-        let reloadGate = AsyncTestGate()
-        let manager = ModelManager(
-            modelName: SpeechModelCatalog.speechAnalyzer.id,
-            speechAnalyzerBackendFactory: { _ in
-                factoryCallCount += 1
-                if factoryCallCount == 2 {
-                    await reloadGate.wait()
-                }
-                return AppStateSpeechAnalyzerStub()
-            }
-        )
-        defer { reloadGate.release() }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults,
-            modelManager: manager
-        )
-        appState.speechModel = SpeechModelCatalog.speechAnalyzer.id
-        appState.preferredLanguage = "en"
-        await appState.loadSpeechModel(name: SpeechModelCatalog.speechAnalyzer.id)
-        appState.status = .ready
-
-        let startGate = AsyncTestGate()
-        let meetingSession = MeetingSession(
-            meetingName: "Starting meeting",
-            transcriber: appState.transcriber,
-            saveDirectory: FileManager.default.temporaryDirectory,
-            captureStartOverride: {
-                await startGate.wait()
-            }
-        )
-        appState.activeMeetingSession = meetingSession
-        let startTask = Task {
-            try? await meetingSession.start()
-        }
-        await waitForCondition { meetingSession.isStarting }
-        appState.preferredLanguage = "fr"
-
-        let reload = Task { await appState.reloadSpeechAnalyzerForPreferredLanguageIfNeeded() }
-        try await Task.sleep(nanoseconds: 100_000_000)
-
-        XCTAssertEqual(factoryCallCount, 1)
-        XCTAssertEqual(appState.status, .ready)
-
-        startGate.release()
-        await startTask.value
-        appState.activeMeetingSession = nil
-        await waitForCondition { factoryCallCount >= 2 }
-        XCTAssertEqual(appState.status, .loading)
-
-        reloadGate.release()
-        await reload.value
-        XCTAssertEqual(appState.status, .ready)
-    }
-
-    func testMeetingSessionStopWaitsForStartupToFinish() async throws {
-        let startGate = AsyncTestGate()
-        let session = MeetingSession(
-            meetingName: "Starting meeting",
-            transcriber: SpeechTranscriber(modelManager: ModelManager()),
-            saveDirectory: FileManager.default.temporaryDirectory,
-            captureStartOverride: {
-                await startGate.wait()
-            }
-        )
-
-        let startTask = Task {
-            try? await session.start()
-        }
-        await waitForCondition { session.isStarting }
-
-        let stopTask = Task { await session.stop() }
-        for _ in 0..<20 {
-            await Task.yield()
-        }
-        XCTAssertTrue(session.isStarting)
-
-        startGate.release()
-        await startTask.value
-        await stopTask.value
-
-        XCTAssertFalse(session.isActive)
-        XCTAssertFalse(session.isStarting)
-        XCTAssertFalse(session.isDraining)
-    }
-
-    func testMeetingSessionStopBeforeStartupCancelsNextStart() async throws {
-        var captureStartCallCount = 0
-        let session = MeetingSession(
-            meetingName: "Cancelled meeting",
-            transcriber: SpeechTranscriber(modelManager: ModelManager()),
-            saveDirectory: FileManager.default.temporaryDirectory,
-            captureStartOverride: {
-                captureStartCallCount += 1
-            }
-        )
-
-        await session.stop()
-        try await session.start()
-
-        XCTAssertEqual(captureStartCallCount, 0)
-        XCTAssertFalse(session.isActive)
-        XCTAssertFalse(session.isStarting)
-        XCTAssertFalse(session.isDraining)
-    }
-
-    func testMeetingSessionStopCleansUpAfterStartupFailure() async throws {
-        struct StartupFailure: Error {}
-        let session = MeetingSession(
-            meetingName: "Failed meeting",
-            transcriber: SpeechTranscriber(modelManager: ModelManager()),
-            saveDirectory: FileManager.default.temporaryDirectory,
-            captureStartOverride: {
-                throw StartupFailure()
-            }
-        )
-
-        do {
-            try await session.start()
-            XCTFail("Expected meeting startup to fail")
-        } catch is StartupFailure {
-            // Expected failure from the injected capture startup.
-        }
-
-        await session.stop()
-
-        XCTAssertFalse(session.isActive)
-        XCTAssertFalse(session.isStarting)
-        XCTAssertFalse(session.isDraining)
-        XCTAssertNotNil(session.fileURL)
-        XCTAssertNotNil(session.transcript.endDate)
-    }
-
-    func testAppStateWaitsForPepperChatTranscriptionBeforeReloadingSpeechAnalyzer() async throws {
-        guard #available(macOS 26, *) else {
-            throw XCTSkip("SpeechAnalyzer requires macOS 26 or later.")
-        }
-        var factoryCallCount = 0
-        let reloadGate = AsyncTestGate()
-        let manager = ModelManager(
-            modelName: SpeechModelCatalog.speechAnalyzer.id,
-            speechAnalyzerBackendFactory: { _ in
-                factoryCallCount += 1
-                if factoryCallCount == 2 {
-                    await reloadGate.wait()
-                }
-                return AppStateSpeechAnalyzerStub()
-            }
-        )
-        defer { reloadGate.release() }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults,
-            modelManager: manager
-        )
-        appState.speechModel = SpeechModelCatalog.speechAnalyzer.id
-        appState.preferredLanguage = "en"
-        await appState.loadSpeechModel(name: SpeechModelCatalog.speechAnalyzer.id)
-        appState.status = .ready
-
-        appState.pepperChatSession.isTranscribing = true
-        appState.preferredLanguage = "fr"
-
-        let reload = Task { await appState.reloadSpeechAnalyzerForPreferredLanguageIfNeeded() }
-        try await Task.sleep(nanoseconds: 100_000_000)
-
-        XCTAssertEqual(factoryCallCount, 1)
-        XCTAssertEqual(appState.status, .ready)
-
-        appState.pepperChatSession.isTranscribing = false
-        await waitForCondition { factoryCallCount >= 2 }
-        XCTAssertEqual(appState.status, .loading)
-
-        reloadGate.release()
-        await reload.value
-        XCTAssertEqual(appState.status, .ready)
-    }
 
     func testAppStateWaitsForTranscriptionLabPipelineBeforeReloadingSpeechAnalyzer() async throws {
         guard #available(macOS 26, *) else {
@@ -1279,92 +855,10 @@ final class GhostPepperTests: XCTestCase {
         XCTAssertEqual(appState.cleanupBackend, .localModels)
     }
 
-    func testAppStateDefaultsPepperChatToEnabledWhenZoTokenAlreadyStored() throws {
-        try withClearedPepperChatAppStorage {
-            UserDefaults.standard.set("zo_sk_existing", forKey: "pepperChatApiKey")
 
-            let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-            defaults.removePersistentDomain(forName: #function)
-            let appState = AppState(
-                hotkeyMonitor: FakeHotkeyMonitor(),
-                chordBindingStore: ChordBindingStore(defaults: defaults),
-                cleanupSettingsDefaults: defaults
-            )
-            appState.loadStoredIntegrationKeysIfNeeded()
 
-            XCTAssertTrue(appState.pepperChatEnabled)
-        }
-    }
 
-    func testAppStateDefaultsPepperChatToDisabledWithoutZoToken() throws {
-        try withClearedPepperChatAppStorage {
-            let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-            defaults.removePersistentDomain(forName: #function)
-            let appState = AppState(
-                hotkeyMonitor: FakeHotkeyMonitor(),
-                chordBindingStore: ChordBindingStore(defaults: defaults),
-                cleanupSettingsDefaults: defaults
-            )
-            appState.loadStoredIntegrationKeysIfNeeded()
 
-            XCTAssertFalse(appState.pepperChatEnabled)
-        }
-    }
-
-    func testAppStateUsesStoredPepperChatToggleOverZoTokenBackCompatDefault() throws {
-        try withClearedPepperChatAppStorage {
-            UserDefaults.standard.set("zo_sk_existing", forKey: "pepperChatApiKey")
-            UserDefaults.standard.set(false, forKey: "pepperChatEnabled")
-
-            let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-            defaults.removePersistentDomain(forName: #function)
-            let appState = AppState(
-                hotkeyMonitor: FakeHotkeyMonitor(),
-                chordBindingStore: ChordBindingStore(defaults: defaults),
-                cleanupSettingsDefaults: defaults
-            )
-            appState.loadStoredIntegrationKeysIfNeeded()
-
-            XCTAssertFalse(appState.pepperChatEnabled)
-        }
-    }
-
-    func testAppStateStartHotkeyMonitorOmitsPepperChatBindingWhenDisabled() async throws {
-        try await withClearedPepperChatAppStorage {
-            UserDefaults.standard.set(false, forKey: "pepperChatEnabled")
-
-            let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-            defaults.removePersistentDomain(forName: #function)
-            let monitor = FakeHotkeyMonitor()
-            let appState = AppState(
-                hotkeyMonitor: monitor,
-                chordBindingStore: ChordBindingStore(defaults: defaults)
-            )
-
-            await appState.startHotkeyMonitor()
-
-            XCTAssertNil(monitor.updatedBindings[.pepperChat])
-        }
-    }
-
-    func testAppStateDoesNotStartPepperChatRecordingWhenDisabled() throws {
-        try withClearedPepperChatAppStorage {
-            UserDefaults.standard.set(false, forKey: "pepperChatEnabled")
-            UserDefaults.standard.set("zo_sk_existing", forKey: "pepperChatApiKey")
-
-            let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-            defaults.removePersistentDomain(forName: #function)
-            let appState = AppState(
-                hotkeyMonitor: FakeHotkeyMonitor(),
-                chordBindingStore: ChordBindingStore(defaults: defaults),
-                cleanupSettingsDefaults: defaults
-            )
-
-            appState.beginPepperChatRecording()
-
-            XCTAssertFalse(appState.pepperChatSession.isRecording)
-        }
-    }
 
     func testSpeechModelPresentationDoesNotExposeManagerLoadFailureInMenuErrorMessage() {
         let loadError = NSError(
