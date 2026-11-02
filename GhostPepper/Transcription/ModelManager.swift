@@ -452,9 +452,12 @@ final class ModelManager: ObservableObject {
         let modelsDir = Self.whisperModelsDirectory
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
 
-        let needsDownload = !Self.modelIsCached(SpeechModelCatalog.model(named: modelName)!)
-        if needsDownload {
-            _ = try await WhisperKit.download(
+        let model = SpeechModelCatalog.model(named: modelName)!
+        let modelFolder: URL
+        if Self.modelIsCached(model) {
+            modelFolder = Self.whisperModelFolder(for: model)
+        } else {
+            modelFolder = try await WhisperKit.download(
                 variant: modelName,
                 downloadBase: modelsDir
             ) { progress in
@@ -465,14 +468,17 @@ final class ModelManager: ObservableObject {
             downloadProgress = nil
         }
 
+        // Pass the local folder with download disabled so a cached model loads
+        // without contacting the Hugging Face hub (e.g. at login before the network is up).
         let config = WhisperKitConfig(
             model: modelName,
             downloadBase: modelsDir,
+            modelFolder: modelFolder.path,
             verbose: false,
             logLevel: .error,
             prewarm: false,
             load: true,
-            download: true
+            download: false
         )
         whisperKit = try await WhisperKit(config)
     }
@@ -777,10 +783,15 @@ final class ModelManager: ObservableObject {
     private static func modelIsCached(_ model: SpeechModelDescriptor) -> Bool {
         switch model.backend {
         case .whisperKit:
-            let modelPath = model.cachePathComponents.reduce(whisperModelsRootDirectory) { partialURL, component in
+            let tokenizerPath = model.cachePathComponents.reduce(whisperModelsRootDirectory) { partialURL, component in
                 partialURL.appendingPathComponent(component, isDirectory: true)
             }
-            return FileManager.default.fileExists(atPath: modelPath.path)
+            .appendingPathComponent("tokenizer.json")
+            let modelFolder = whisperModelFolder(for: model)
+            let hasModelFiles = whisperKitRequiredModelFiles.allSatisfy { fileName in
+                FileManager.default.fileExists(atPath: modelFolder.appendingPathComponent(fileName).path)
+            }
+            return hasModelFiles && FileManager.default.fileExists(atPath: tokenizerPath.path)
         case .fluidAudio:
             guard let fluidAudioVariant = model.fluidAudioVariant else {
                 return false
@@ -847,6 +858,19 @@ final class ModelManager: ObservableObject {
 
     private static var whisperModelsRootDirectory: URL {
         whisperModelsDirectory.appendingPathComponent("models", isDirectory: true)
+    }
+
+    private static let whisperKitRequiredModelFiles = [
+        "MelSpectrogram.mlmodelc",
+        "AudioEncoder.mlmodelc",
+        "TextDecoder.mlmodelc",
+    ]
+
+    /// Where `WhisperKit.download` places a variant's CoreML models; the tokenizer lives separately at `cachePathComponents`.
+    private static func whisperModelFolder(for model: SpeechModelDescriptor) -> URL {
+        whisperModelsRootDirectory
+            .appendingPathComponent("argmaxinc/whisperkit-coreml", isDirectory: true)
+            .appendingPathComponent(model.name, isDirectory: true)
     }
 }
 
