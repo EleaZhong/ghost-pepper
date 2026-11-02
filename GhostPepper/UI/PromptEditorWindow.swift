@@ -6,6 +6,7 @@ final class PromptEditorController: NSObject, NSWindowDelegate {
 
     func show(appState: AppState) {
         if let window = window {
+            WindowActivationCoordinator.begin(for: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -26,6 +27,7 @@ final class PromptEditorController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: editor)
         window.center()
+        WindowActivationCoordinator.begin(for: window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -46,6 +48,7 @@ final class PromptEditorController: NSObject, NSWindowDelegate {
     private func hide(_ window: NSWindow) {
         window.makeFirstResponder(nil)
         window.orderOut(nil)
+        WindowActivationCoordinator.end(for: window)
     }
 }
 
@@ -65,6 +68,7 @@ final class CleanupTranscriptWindowController: NSObject, NSWindowDelegate {
         }
 
         if let window {
+            WindowActivationCoordinator.begin(for: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -81,6 +85,7 @@ final class CleanupTranscriptWindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.contentViewController = hostingController
         window.center()
+        WindowActivationCoordinator.begin(for: window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -101,6 +106,7 @@ final class CleanupTranscriptWindowController: NSObject, NSWindowDelegate {
     private func hide(_ window: NSWindow) {
         window.makeFirstResponder(nil)
         window.orderOut(nil)
+        WindowActivationCoordinator.end(for: window)
     }
 }
 

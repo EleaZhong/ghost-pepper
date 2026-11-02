@@ -10,6 +10,7 @@ final class DebugLogWindowController: NSObject, NSWindowDelegate {
         if let window = window {
             self.debugLogStore = debugLogStore
             beginLiveViewingIfNeeded()
+            WindowActivationCoordinator.begin(for: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -33,6 +34,7 @@ final class DebugLogWindowController: NSObject, NSWindowDelegate {
         self.debugLogStore = debugLogStore
         beginLiveViewingIfNeeded()
         window.center()
+        WindowActivationCoordinator.begin(for: window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -42,6 +44,7 @@ final class DebugLogWindowController: NSObject, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         endLiveViewingIfNeeded()
         sender.orderOut(nil)
+        WindowActivationCoordinator.end(for: sender)
         return false
     }
 

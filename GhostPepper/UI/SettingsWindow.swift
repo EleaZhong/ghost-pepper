@@ -12,11 +12,34 @@ extension Notification.Name {
     static let indexEntryWritten = Notification.Name("indexEntryWritten")
 }
 
+/// Ghost Pepper runs as an accessory app (`LSUIElement`, no Dock icon). Auxiliary windows
+/// must temporarily switch to `.regular` to reliably come to the front and take key focus —
+/// this tracks which windows currently need that so closing one doesn't yank the policy out
+/// from under another that's still open (each window controller here was previously flipping
+/// the policy independently, which is what let the app get stuck in `.accessory` while a
+/// window was still visible).
+enum WindowActivationCoordinator {
+    private static var activeWindows: Set<ObjectIdentifier> = []
+
+    static func begin(for window: NSWindow) {
+        activeWindows.insert(ObjectIdentifier(window))
+        NSApp.setActivationPolicy(.regular)
+    }
+
+    static func end(for window: NSWindow) {
+        activeWindows.remove(ObjectIdentifier(window))
+        if activeWindows.isEmpty {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+}
+
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
     func show(appState: AppState, section: SettingsSection? = nil) {
         if let window = window {
+            WindowActivationCoordinator.begin(for: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             if let section {
@@ -39,6 +62,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.minSize = NSSize(width: 900, height: 680)
         window.contentViewController = NSHostingController(rootView: view)
         window.center()
+        WindowActivationCoordinator.begin(for: window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -47,6 +71,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
+        WindowActivationCoordinator.end(for: sender)
         return false
     }
 }
