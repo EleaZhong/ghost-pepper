@@ -94,6 +94,17 @@ enum SpeechModelCatalog {
         mlxAudioRepository: nil
     )
 
+    static let whisperLargeV3Turbo = SpeechModelDescriptor(
+        name: "openai_whisper-large-v3-v20240930_turbo_632MB",
+        pickerTitle: "Whisper large-v3 turbo",
+        variantName: "large-v3-turbo, 8-bit",
+        sizeDescription: "~632 MB",
+        backend: .whisperKit,
+        cachePathComponents: ["openai", "whisper-large-v3"],
+        fluidAudioVariant: nil,
+        mlxAudioRepository: nil
+    )
+
     static let parakeetV3 = SpeechModelDescriptor(
         name: "fluid_parakeet-v3",
         pickerTitle: "Parakeet v3",
@@ -160,6 +171,7 @@ enum SpeechModelCatalog {
         whisperTiny,
         whisperSmallEnglish,
         whisperSmallMultilingual,
+        whisperLargeV3Turbo,
         parakeetV3,
         nemotronSpeechStreamingEnglish,
         nemotron35Streaming,
