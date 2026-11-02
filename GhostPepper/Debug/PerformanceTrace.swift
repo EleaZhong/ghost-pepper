@@ -1,6 +1,6 @@
 import Foundation
 
-struct PerformanceTrace {
+final class PerformanceTrace {
     let sessionID: String
     let startedAt: Date
 
