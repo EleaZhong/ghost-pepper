@@ -31,13 +31,98 @@ final class CorrectionStore: ObservableObject {
         set { updateCommonlyMisheard(from: newValue) }
     }
 
+    /// The measured starter glossary (voice-eval: mined from atlas + session transcripts,
+    /// reviewed by Elea, 2026-11-02). Feeds Whisper promptTokens, cleanup CORRECTION-HINTS,
+    /// and OCR customWords. User-editable in Settings once set.
+    static let glossaryPreset: [String] = [
+        "lapse",
+        "flywheel",
+        "agentic",
+        "recipipe",
+        "bbml",
+        "elex",
+        "krea",
+        "kreka",
+        "devbox",
+        "portboard",
+        "gxfer",
+        "pickpush",
+        "posttrain",
+        "pretrain",
+        "dot-claude",
+        "research-main",
+        "ruleset",
+        "pytorchjob",
+        "tigris",
+        "skim",
+        "slogs",
+        "krc",
+        "rcc",
+        "kqmono",
+        "kueue",
+        "krablet",
+        "runstat",
+        "pluck",
+        "DSPy",
+        "GEPA",
+        "GRPO",
+        "DPO",
+        "tmux",
+        "worktree",
+        "uv",
+        "venv",
+        "zsh",
+        "pyenv",
+        "subagent",
+        "FSDP",
+        "LoRA",
+        "NCCL",
+        "DTensor",
+        "SFT",
+        "RLHF",
+        "MCP",
+        "MLX",
+        "CoreML",
+        "Qwen",
+        "Postgres",
+        "SQLite",
+        "FastAPI",
+        "uvicorn",
+        "pydantic",
+        "Kubernetes",
+        "k8s",
+        "PyTorch",
+        "JAX",
+        "tokenizer",
+        "wandb",
+        "weka",
+        "GCS",
+        "Claude",
+        "Kimi",
+        "Elea",
+        "GitHub",
+        "OpenAI",
+        "Anthropic",
+        "Gemini",
+        "Hugging Face",
+        "atlas",
+        "JSON",
+        "YAML",
+        "SQL",
+        "API",
+        "CLI",
+        "SDK",
+        "LLM",
+    ]
+
     private static let preferredTranscriptionsDefaultsKey = "preferredTranscriptionsDraft"
     private static let commonlyMisheardDefaultsKey = "commonlyMisheardDraft"
 
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
-        let preferredDraft = defaults.string(forKey: Self.preferredTranscriptionsDefaultsKey) ?? ""
+        let preferredDraft = defaults.string(forKey: Self.preferredTranscriptionsDefaultsKey)
+            ?? Self.glossaryPreset.joined(separator: "\n")
         let commonlyMisheardDraft = defaults.string(forKey: Self.commonlyMisheardDefaultsKey) ?? ""
 
         self.defaults = defaults
