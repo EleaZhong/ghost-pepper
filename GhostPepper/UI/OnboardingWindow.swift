@@ -275,7 +275,6 @@ struct SetupStep: View {
             cachedSpeechModelNames: modelManager.cachedModelNames,
             cleanupState: appState.textCleanupManager.state,
             selectedCleanupModelKind: appState.textCleanupManager.selectedCleanupModelKind,
-            selectedWikiModelKind: nil,
             cachedCleanupKinds: appState.textCleanupManager.cachedModelKinds
         )
     }

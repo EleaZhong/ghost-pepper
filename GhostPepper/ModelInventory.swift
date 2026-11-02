@@ -27,7 +27,6 @@ enum RuntimeModelInventory {
         cachedSpeechModelNames: Set<String>,
         cleanupState: CleanupModelState,
         selectedCleanupModelKind: LocalCleanupModelKind,
-        selectedWikiModelKind: LocalCleanupModelKind? = nil,
         cachedCleanupKinds: Set<LocalCleanupModelKind>
     ) -> [RuntimeModelRow] {
         let speechRows = ModelManager.availableModels.map { model in
@@ -53,7 +52,7 @@ enum RuntimeModelInventory {
                 id: "cleanup-\(model.fileName)",
                 name: model.displayName,
                 sizeDescription: model.sizeDescription,
-                isSelected: model.kind == selectedCleanupModelKind || model.kind == selectedWikiModelKind,
+                isSelected: model.kind == selectedCleanupModelKind,
                 status: statusForCleanupModel(
                     kind: model.kind,
                     cleanupState: cleanupState,

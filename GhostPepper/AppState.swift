@@ -214,15 +214,6 @@ class AppState: ObservableObject {
             )
         }
     }
-    @Published var selectedWikiModelKind: LocalCleanupModelKind {
-        didSet {
-            cleanupSettingsDefaults.set(
-                selectedWikiModelKind.rawValue,
-                forKey: Self.selectedWikiModelDefaultsKey
-            )
-        }
-    }
-
     let modelManager: ModelManager
     let audioRecorder: AudioRecorder
     let transcriber: SpeechTranscriber
@@ -290,7 +281,6 @@ class AppState: ObservableObject {
     private static let frontmostWindowContextEnabledDefaultsKey = "frontmostWindowContextEnabled"
     private static let postPasteLearningEnabledDefaultsKey = "postPasteLearningEnabled"
     private static let ignoreOtherSpeakersDefaultsKey = "ignoreOtherSpeakers"
-    private static let selectedWikiModelDefaultsKey = "selectedWikiModelKind"
     private static let playSoundsDefaultsKey = "playSounds"
     private static let alwaysAllowedPasteApplicationsDefaultsKey = "alwaysAllowedPasteApplications"
     private static let archivedRecordingSampleRate = 16_000.0
@@ -400,12 +390,6 @@ class AppState: ObservableObject {
         self.alwaysAllowedPasteApplications = Self.loadAlwaysAllowedPasteApplications(
             defaults: cleanupSettingsDefaults
         )
-        let storedWikiModelKind = LocalCleanupModelKind(
-            rawValue: cleanupSettingsDefaults.string(forKey: Self.selectedWikiModelDefaultsKey) ?? ""
-        )
-        self.selectedWikiModelKind = storedWikiModelKind == .gemma4_12b_it_optiq_4bit_mlx
-            ? .wikiDefault
-            : (storedWikiModelKind ?? .wikiDefault)
         if cleanupSettingsDefaults.object(forKey: Self.playSoundsDefaultsKey) == nil {
             self.playSounds = true
         } else {
@@ -1117,7 +1101,6 @@ class AppState: ObservableObject {
     }
 
     private let settingsController = SettingsWindowController()
-    private let promptEditorController = PromptEditorController()
     private let cleanupTranscriptWindowController = CleanupTranscriptWindowController()
     private let debugLogWindowController = DebugLogWindowController()
 
@@ -1140,10 +1123,6 @@ class AppState: ObservableObject {
 
     func showSettings(section: SettingsSection? = nil) {
         settingsController.show(appState: self, section: section)
-    }
-
-    func showPromptEditor() {
-        promptEditorController.show(appState: self)
     }
 
     func showCleanupTranscript(_ transcript: TranscriptionLabCleanupTranscript) {
@@ -1613,6 +1592,20 @@ class AppState: ObservableObject {
 
     func setShortcutCaptureActive(_ isActive: Bool) {
         hotkeyMonitor.setSuspended(isActive)
+    }
+
+    @AppStorage("dictationPreset") var dictationPresetID: String = DictationPreset.default.id
+
+    /// The one model knob: a named preset applies speech model + cleanup configuration
+    /// atomically (task:presets-only-ux). The voice tag stays a manual toggle.
+    func applyPreset(_ preset: DictationPreset) {
+        dictationPresetID = preset.id
+        speechModel = preset.speechModelID
+        setCleanupEnabled(preset.cleanupEnabled)
+        textCleanupManager.selectedCleanupModelKind = preset.cleanupModelKind
+        Task {
+            await loadSpeechModel(name: preset.speechModelID)
+        }
     }
 
     func setCleanupEnabled(_ enabled: Bool) {
