@@ -186,6 +186,9 @@ class AppState: ObservableObject {
     @AppStorage("cleanupEnabled") var cleanupEnabled: Bool = true
     @AppStorage("transcriptionLabEnabled") var transcriptionLabEnabled: Bool = false
     @AppStorage("cleanupPrompt") var cleanupPrompt: String = TextCleaner.defaultPrompt
+    @AppStorage("transcriptionTagEnabled") var transcriptionTagEnabled: Bool = false
+    @AppStorage("transcriptionTagText") var transcriptionTagText: String = "[voice]"
+    @AppStorage("transcriptionTagIsPrefix") var transcriptionTagIsPrefix: Bool = true
     @AppStorage("speechModel") var speechModel: String = SpeechModelCatalog.defaultModelID
     @AppStorage("preferredLanguage") var preferredLanguage: String = "auto"
     @AppStorage("pepperChatHost") var pepperChatHost: String = "https://api.zo.computer"
@@ -1120,13 +1123,18 @@ class AppState: ObservableObject {
         }
 
         if shouldPaste {
-            let pasteResult = textPaster.paste(text: finalText)
+            let pasteResult = textPaster.paste(text: taggedForPaste(finalText))
             if pasteResult == .copiedToClipboard {
                 showClipboardFallbackMessage()
             }
         }
 
         return true
+    }
+
+    private func taggedForPaste(_ text: String) -> String {
+        guard transcriptionTagEnabled, !transcriptionTagText.isEmpty else { return text }
+        return transcriptionTagIsPrefix ? "\(transcriptionTagText) \(text)" : "\(text) \(transcriptionTagText)"
     }
 
     private func transcribedTextForRecording(

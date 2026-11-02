@@ -1210,6 +1210,35 @@ struct SettingsView: View {
                 }
             }
 
+            SettingsCard("Transcription Tag") {
+                VStack(alignment: .leading, spacing: 16) {
+                    Toggle(
+                        "Tag pasted text as voice transcription",
+                        isOn: $appState.transcriptionTagEnabled
+                    )
+
+                    if appState.transcriptionTagEnabled {
+                        SettingsField("Tag text") {
+                            TextField("e.g. [voice]", text: $appState.transcriptionTagText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 320)
+                        }
+
+                        Picker("Position", selection: $appState.transcriptionTagIsPrefix) {
+                            Text("Prefix").tag(true)
+                            Text("Suffix").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 200)
+                    }
+
+                    Text("Adds this tag to text as it's pasted, so recipients can tell it came from dictation rather than typing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             SettingsCard("Cleanup prompt") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Ghost Pepper uses this prompt before adding OCR context and correction hints.")
