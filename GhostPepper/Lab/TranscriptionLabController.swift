@@ -459,13 +459,38 @@ final class TranscriptionLabController: ObservableObject {
         audioURLForEntry(entry)
     }
 
+    private var reloadGeneration = 0
+
+    /// Decode the archive off the main thread (defect:history-tab-lag): the index, stage
+    /// timings and voice prints are hundreds of entries of JSON, and this runs on every
+    /// visit to the History tab. A stale completion (an older generation landing after a
+    /// newer one started) is discarded.
     func reloadEntries() {
+        reloadGeneration += 1
+        let generation = reloadGeneration
+        Task.detached { [weak self] in
+            let result = Result { () throws -> ([TranscriptionLabEntry], [UUID: TranscriptionLabStageTimings], [UUID: RecognizedVoiceProfile]) in
+                guard let self else { throw CancellationError() }
+                let loadedEntries = try self.loadEntries().sorted { $0.createdAt > $1.createdAt }
+                let timings = try self.loadStageTimings()
+                let voices = Dictionary(uniqueKeysWithValues: try self.loadRecognizedVoices().map { ($0.id, $0) })
+                return (loadedEntries, timings, voices)
+            }
+            await MainActor.run {
+                guard let self, self.reloadGeneration == generation else { return }
+                self.applyLoadedEntries(result)
+            }
+        }
+    }
+
+    @MainActor
+    private func applyLoadedEntries(
+        _ result: Result<([TranscriptionLabEntry], [UUID: TranscriptionLabStageTimings], [UUID: RecognizedVoiceProfile]), any Error>
+    ) {
         do {
-            let loadedEntries = try loadEntries().sorted { $0.createdAt > $1.createdAt }
-            originalStageTimingsByEntryID = try loadStageTimings()
-            recognizedVoicesByID = Dictionary(
-                uniqueKeysWithValues: try loadRecognizedVoices().map { ($0.id, $0) }
-            )
+            let (loadedEntries, timings, voices) = try result.get()
+            originalStageTimingsByEntryID = timings
+            recognizedVoicesByID = voices
             entries = loadedEntries
 
             if let selectedEntryID,

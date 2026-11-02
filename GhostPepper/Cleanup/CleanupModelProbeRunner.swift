@@ -61,7 +61,9 @@ struct CleanupModelProbeRunner {
         modelKind: LocalCleanupModelKind,
         thinkingMode: CleanupModelProbeThinkingMode,
         prompt: String? = nil,
-        windowContext: OCRContext? = nil
+        windowContext: OCRContext? = nil,
+        preferredTranscriptions: [String]? = nil,
+        commonlyMisheard: [MisheardReplacement]? = nil
     ) async throws -> CleanupModelProbeTranscript {
         let basePrompt = prompt ?? TextCleaner.defaultPrompt
         let activePrompt = TextCleaner.effectivePrompt(
@@ -71,8 +73,8 @@ struct CleanupModelProbeRunner {
         let finalPrompt = promptBuilder.buildPrompt(
             basePrompt: activePrompt,
             windowContext: windowContext,
-            preferredTranscriptions: correctionStore.preferredTranscriptions,
-            commonlyMisheard: correctionStore.commonlyMisheard,
+            preferredTranscriptions: preferredTranscriptions ?? correctionStore.preferredTranscriptions,
+            commonlyMisheard: commonlyMisheard ?? correctionStore.commonlyMisheard,
             includeWindowContext: windowContext != nil
         )
         let modelInputText = input

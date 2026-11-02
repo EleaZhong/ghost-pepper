@@ -11,6 +11,13 @@ struct DictationPreset: Identifiable, Equatable {
     let speechModelID: String
     let cleanupEnabled: Bool
     let cleanupModelKind: LocalCleanupModelKind
+    /// OCR window context in the cleanup prompt. OFF in every current preset: the gold
+    /// matrix was measured without OCR, so on is unmeasured. Capture-and-archive runs
+    /// regardless, so a future eval can judge on vs off from the same archive.
+    let ocrInCleanup: Bool
+    /// Preferred/misheard lists inside the cleanup prompt. OFF: unmeasured. The glossary
+    /// still feeds decode promptTokens (measured +8.9pt jargon recall on small.en).
+    let cleanupHints: Bool
 
     /// Measured default: turbo + glossary prompt was 5.4% corpus WER / 73% jargon recall
     /// on the 100-clip gold; cleanup 2B removes fillers and self-corrections.
@@ -20,7 +27,9 @@ struct DictationPreset: Identifiable, Equatable {
         summary: "Whisper large-v3 turbo + glossary, cleanup on (Qwen 3.5 2B). The measured daily driver.",
         speechModelID: "openai_whisper-large-v3-v20240930_turbo_632MB",
         cleanupEnabled: true,
-        cleanupModelKind: .qwen35_2b_q4_k_m
+        cleanupModelKind: .qwen35_2b_q4_k_m,
+        ocrInCleanup: false,
+        cleanupHints: false
     )
 
     /// Lowest latency, cleanup off: raw turbo text, glossary still on.
@@ -30,7 +39,9 @@ struct DictationPreset: Identifiable, Equatable {
         summary: "Whisper large-v3 turbo + glossary, cleanup off. Raw ASR, fastest paste.",
         speechModelID: "openai_whisper-large-v3-v20240930_turbo_632MB",
         cleanupEnabled: false,
-        cleanupModelKind: .qwen35_2b_q4_k_m
+        cleanupModelKind: .qwen35_2b_q4_k_m,
+        ocrInCleanup: false,
+        cleanupHints: false
     )
 
     /// small.en for comparison days: measured 10.6% WER / 73% recall with the glossary.
@@ -40,7 +51,9 @@ struct DictationPreset: Identifiable, Equatable {
         summary: "Whisper small.en + glossary, cleanup off. The pre-turbo baseline, kept for A/B days.",
         speechModelID: "openai_whisper-small.en",
         cleanupEnabled: false,
-        cleanupModelKind: .qwen35_2b_q4_k_m
+        cleanupModelKind: .qwen35_2b_q4_k_m,
+        ocrInCleanup: false,
+        cleanupHints: false
     )
 
     static let all: [DictationPreset] = [standard, verbatim, reference]

@@ -21,8 +21,7 @@ final class TextCleanerTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
         defaults.removePersistentDomain(forName: #function)
         let correctionStore = CorrectionStore(defaults: defaults)
-        correctionStore.preferredTranscriptionsText = "Ghost Pepper"
-        let localBackend = SpyCleanupBackend(nextResult: .success("ghost pepper is ready"))
+        let localBackend = SpyCleanupBackend(nextResult: .success("recipipe is ready"))
         let cleaner = TextCleaner(
             localBackend: localBackend,
             correctionStore: correctionStore
@@ -30,7 +29,7 @@ final class TextCleanerTests: XCTestCase {
 
         let result = await cleaner.clean(text: "Ghost Pepper is ready", prompt: "unused prompt")
 
-        XCTAssertEqual(result, "ghost pepper is ready")
+        XCTAssertEqual(result, "recipipe is ready")
         XCTAssertEqual(
             localBackend.cleanedInputs.map(\.text),
             [TextCleaner.formatCleanupInput(userInput: "Ghost Pepper is ready")]
@@ -103,8 +102,7 @@ final class TextCleanerTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
         defaults.removePersistentDomain(forName: #function)
         let correctionStore = CorrectionStore(defaults: defaults)
-        correctionStore.preferredTranscriptionsText = "Ghost Pepper"
-        let localBackend = SpyCleanupBackend(nextResult: .success("ghost-pepper is ready"))
+        let localBackend = SpyCleanupBackend(nextResult: .success("recipipe is ready"))
         let cleaner = TextCleaner(
             localBackend: localBackend,
             correctionStore: correctionStore
@@ -112,7 +110,7 @@ final class TextCleanerTests: XCTestCase {
 
         let result = await cleaner.clean(text: "Ghost Pepper is ready", prompt: "unused prompt")
 
-        XCTAssertEqual(result, "ghost-pepper is ready")
+        XCTAssertEqual(result, "recipipe is ready")
     }
 
     func testCommonlyMisheardReplacementSpecialCharactersArePromptHintsOnly() async throws {
@@ -179,8 +177,7 @@ final class TextCleanerTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let correctionStore = CorrectionStore(defaults: defaults)
         correctionStore.commonlyMisheardText = "chat gbt -> ChatGPT"
-        correctionStore.preferredTranscriptionsText = "Ghost Pepper"
-        let localBackend = SpyCleanupBackend(nextResult: .success("ghost-pepper is ready"))
+        let localBackend = SpyCleanupBackend(nextResult: .success("recipipe is ready"))
         let cleaner = TextCleaner(
             localBackend: localBackend,
             correctionStore: correctionStore
@@ -195,7 +192,7 @@ final class TextCleanerTests: XCTestCase {
             prompt: "Use OCR context if present."
         )
 
-        XCTAssertEqual(result, "ghost-pepper is ready")
+        XCTAssertEqual(result, "recipipe is ready")
         XCTAssertTrue(sensitiveMessages.contains(where: { $0.contains("Cleanup LLM transcript") }))
         XCTAssertTrue(sensitiveMessages.contains(where: { $0.contains("System prompt") }))
         XCTAssertTrue(sensitiveMessages.contains(where: { $0.contains("<USER-INPUT>") }))
