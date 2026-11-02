@@ -474,6 +474,9 @@ class AppState: ObservableObject {
         )
 
         // Forward nested model manager state changes so SwiftUI refreshes settings rows in place.
+        self.modelManager.vocabularyPromptProvider = { [weak self] in
+            self?.correctionStore.preferredTranscriptions ?? []
+        }
         modelStateObserver = self.modelManager.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
                 self?.objectWillChange.send()
