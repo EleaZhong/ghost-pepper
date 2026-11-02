@@ -82,7 +82,9 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
         let transcript = try! await runner.run(
             input: "Okay, it's running now.",
             modelKind: .fast,
-            thinkingMode: .none
+            thinkingMode: .none,
+            preferredTranscriptions: [],
+            commonlyMisheard: [],
         )
 
         XCTAssertEqual(transcript.modelInputText, "Okay, it's running now.")
@@ -173,7 +175,9 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
             modelKind: .full,
             thinkingMode: .suppressed,
             prompt: TextCleaner.defaultPrompt,
-            windowContext: OCRContext(windowContents: "Terminal says hello")
+            windowContext: OCRContext(windowContents: "Terminal says hello"),
+            preferredTranscriptions: [],
+            commonlyMisheard: []
         )
 
         XCTAssertEqual(transcript.finalPrompt, CleanupPromptBuilder().buildPrompt(
@@ -211,7 +215,9 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
             input: "Base input",
             modelKind: .qwen35_0_8b_q4_k_m,
             thinkingMode: .suppressed,
-            prompt: "Base prompt"
+            prompt: "Base prompt",
+            preferredTranscriptions: [],
+            commonlyMisheard: []
         )
 
         XCTAssertEqual(transcript.finalPrompt, "Base prompt")

@@ -3,6 +3,36 @@ import XCTest
 
 @MainActor
 final class TranscriptionLabControllerTests: XCTestCase {
+    /// Poll until the async archive load (defect:history-tab-lag made reloadEntries
+    /// off-main) lands, or fail after ~2s.
+    /// Run-loop variant for non-async tests (pumps the main queue so the MainActor
+    /// completion from reloadEntries can land).
+    func waitForConditionSync(
+        _ condition: @escaping () -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let deadline = Date().addingTimeInterval(2)
+        while !condition() && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        if !condition() {
+            XCTFail("Timed out waiting for condition", file: file, line: line)
+        }
+    }
+
+    func waitForCondition(
+        _ condition: @escaping () -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<200 {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Timed out waiting for condition", file: file, line: line)
+    }
+
     func testReloadEntriesSortsEntriesButStartsInBrowserMode() {
         let olderEntry = makeEntry(
             createdAt: Date(timeIntervalSince1970: 10),
@@ -32,6 +62,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
 
         XCTAssertEqual(controller.entries.map { $0.id }, [newerEntry.id, olderEntry.id])
         XCTAssertNil(controller.selectedEntryID)
@@ -62,6 +93,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         XCTAssertEqual(controller.selectedSpeechModelID, "fluid_parakeet-v3")
@@ -188,6 +220,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
             }
         )
         controller.reloadEntries()
+        await waitForCondition { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
         controller.selectedSpeechModelID = "fluid_parakeet-v3"
         controller.usesSpeakerTagging = true
@@ -274,6 +307,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
             syncSpeakerTaggingEnabled: { synchronizedSpeakerTaggingStates.append($0) }
         )
         controller.reloadEntries()
+        await waitForCondition { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         await controller.rerunDiarization()
@@ -344,6 +378,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         controller.updateSpeakerDisplayName("Jesse", for: "Speaker 0")
@@ -406,6 +441,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         XCTAssertEqual(controller.displayName(for: "Speaker 0"), "Jesse Vincent")
@@ -471,6 +507,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         controller.setSpeakerRecognizedVoiceID(recognizedVoiceID, for: "Speaker 0")
@@ -546,6 +583,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         controller.updateSpeakerDisplayName("Jesse", for: "Speaker 0")
@@ -580,6 +618,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         XCTAssertEqual(controller.displayedExperimentRawTranscription, "raw")
@@ -628,6 +667,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         XCTAssertEqual(
@@ -715,6 +755,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         XCTAssertEqual(
@@ -749,6 +790,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        waitForConditionSync { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         XCTAssertNil(controller.diarizationVisualization)
@@ -814,6 +856,7 @@ final class TranscriptionLabControllerTests: XCTestCase {
         )
 
         controller.reloadEntries()
+        await waitForCondition { !controller.entries.isEmpty }
         controller.selectEntry(entry.id)
 
         await controller.rerunTranscription()

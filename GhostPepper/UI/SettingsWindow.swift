@@ -130,7 +130,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case cleanup
     case models
     case transcriptionLab
-    case recognizedVoices
 
     var id: String { rawValue }
 
@@ -140,7 +139,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .cleanup: "Cleanup"
         case .models: "Models"
         case .transcriptionLab: "History"
-        case .recognizedVoices: "Recognized Voices"
         }
     }
 
@@ -150,7 +148,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .cleanup: "Prompt cleanup, correction hints, OCR context, and learning behavior."
         case .models: "Speech and cleanup model downloads and runtime status."
         case .transcriptionLab: "Saved recordings, reruns, and cleanup experiments."
-        case .recognizedVoices: "Reusable speaker labels and 'this is me' voice prints."
         }
     }
 
@@ -160,7 +157,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .cleanup: "sparkles"
         case .models: "brain"
         case .transcriptionLab: "waveform.badge.magnifyingglass"
-        case .recognizedVoices: "person.crop.circle.badge.checkmark"
         }
     }
 }
@@ -189,9 +185,7 @@ struct SettingsView: View {
     @State private var permissionPollTimer: Timer?
     @State private var selectedSection: SettingsSection
     @State private var transcriptionLabPreviewSound: NSSound?
-    @State private var recognizedVoices: [RecognizedVoiceProfile] = []
     @State private var recognizedVoiceSpeakerProfilesByID: [UUID: [TranscriptionLabSpeakerProfile]] = [:]
-    @State private var recognizedVoicesErrorMessage: String?
     @StateObject private var dictationTestController: SettingsDictationTestController
     @StateObject private var transcriptionLabController: TranscriptionLabController
 
@@ -364,7 +358,6 @@ struct SettingsView: View {
             startPermissionPollingIfNeeded()
             syncTranscriptionLabRerunDefaults()
             transcriptionLabController.reloadEntries()
-            reloadRecognizedVoices()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshInputDevices()
@@ -380,8 +373,6 @@ struct SettingsView: View {
             if newSection == .transcriptionLab {
                 syncTranscriptionLabRerunDefaults()
                 transcriptionLabController.reloadEntries()
-            } else if newSection == .recognizedVoices {
-                reloadRecognizedVoices()
             }
         }
         .onChange(of: appState.speechModel) { _, _ in
@@ -462,52 +453,9 @@ struct SettingsView: View {
         )
     }
 
-    private func reloadRecognizedVoices() {
-        do {
-            recognizedVoices = try appState.loadRecognizedVoiceProfiles()
-            recognizedVoiceSpeakerProfilesByID = Dictionary(
-                grouping: try appState.loadAllTranscriptionLabSpeakerProfiles().filter { $0.recognizedVoiceID != nil },
-                by: { $0.recognizedVoiceID! }
-            )
-            recognizedVoicesErrorMessage = nil
-        } catch {
-            recognizedVoices = []
-            recognizedVoiceSpeakerProfilesByID = [:]
-            recognizedVoicesErrorMessage = "Could not load recognized voices."
-        }
-    }
 
-    private func upsertRecognizedVoiceProfile(_ profile: RecognizedVoiceProfile) {
-        do {
-            try appState.upsertRecognizedVoiceProfile(profile)
-            replaceRecognizedVoiceProfile(profile)
-            recognizedVoicesErrorMessage = nil
-        } catch {
-            recognizedVoicesErrorMessage = "Could not save that recognized voice."
-        }
-    }
 
-    private func replaceRecognizedVoiceProfile(_ updatedProfile: RecognizedVoiceProfile) {
-        guard let existingIndex = recognizedVoices.firstIndex(where: { $0.id == updatedProfile.id }) else {
-            recognizedVoices.append(updatedProfile)
-            return
-        }
 
-        recognizedVoices[existingIndex] = updatedProfile
-    }
-
-    private func unlinkSpeakerProfileFromRecognizedVoice(_ profile: TranscriptionLabSpeakerProfile) {
-        var updatedProfile = profile
-        updatedProfile.recognizedVoiceID = nil
-
-        do {
-            try appState.upsertTranscriptionLabSpeakerProfile(updatedProfile)
-            reloadRecognizedVoices()
-            transcriptionLabController.reloadEntries()
-        } catch {
-            recognizedVoicesErrorMessage = "Could not unlink that speaker print."
-        }
-    }
 
     private func playTranscriptionLabAudio(for entry: TranscriptionLabEntry) {
         let sound = NSSound(contentsOf: transcriptionLabController.audioURL(for: entry), byReference: false)
@@ -610,8 +558,6 @@ struct SettingsView: View {
                 modelsSection
             case .transcriptionLab:
                 transcriptionLabSection
-            case .recognizedVoices:
-                recognizedVoicesSection
             }
 
             Spacer(minLength: 0)
@@ -956,46 +902,45 @@ struct SettingsView: View {
             }
 
 
-            SettingsCard("Correction hints") {
-                VStack(alignment: .leading, spacing: 20) {
-                    CorrectionsEditor(
-                        title: "Preferred transcriptions",
-                        text: Binding(
-                            get: { appState.correctionStore.preferredTranscriptionsText },
-                            set: { appState.correctionStore.preferredTranscriptionsText = $0 }
-                        ),
-                        prompt: "One preferred word or phrase per line"
-                    )
-
-                    Divider()
-
-                    CorrectionsEditor(
-                        title: "Commonly misheard",
-                        text: Binding(
-                            get: { appState.correctionStore.commonlyMisheardText },
-                            set: { appState.correctionStore.commonlyMisheardText = $0 }
-                        ),
-                        prompt: "One likely phrase pair per line using probably wrong -> probably right"
-                    )
-
-                    Text("Correction hints are added to the cleanup prompt; they are not applied as regexes or deterministic substitutions. Preferred transcriptions are also forwarded into OCR custom words.")
+            SettingsCard("Glossary & corrections") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Glossary (baked preset, \(CorrectionStore.glossaryPreset.count) terms)")
+                        .font(.caption.weight(.medium))
+                    Text(CorrectionStore.glossaryPreset.joined(separator: ", "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+
+                    if !appState.correctionStore.commonlyMisheard.isEmpty {
+                        Divider()
+                        Text("Harvested corrections (\(appState.correctionStore.commonlyMisheard.count), never auto-applied)")
+                            .font(.caption.weight(.medium))
+                        Text(appState.correctionStore.commonlyMisheard.map { "\($0.wrong) → \($0.right)" }.joined(separator: ", "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+
+                    Text("The glossary feeds decoding (promptTokens) and OCR custom words. Correction hints inside cleanup are preset-gated — off in every current preset, unmeasured. New glossary terms arrive baked from the eval loop.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
             SettingsCard("Context") {
                 VStack(alignment: .leading, spacing: 16) {
-                    Toggle(
-                        "Use frontmost window OCR context",
-                        isOn: Binding(
-                            get: { appState.frontmostWindowContextEnabled },
-                            set: { appState.frontmostWindowContextEnabled = $0 }
-                        )
-                    )
+                    HStack {
+                        Text("OCR in cleanup: off")
+                            .font(.body.weight(.medium))
+                        Text("· set by the preset")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
 
-                    if appState.frontmostWindowContextEnabled && !hasScreenRecordingPermission {
+                    if !hasScreenRecordingPermission {
                         ScreenRecordingRecoveryView {
                             _ = PermissionChecker.requestScreenRecordingPermission()
                             PermissionChecker.openScreenRecordingSettings()
@@ -1003,23 +948,7 @@ struct SettingsView: View {
                         }
                     }
 
-                    Toggle(
-                        "Learn from manual corrections after paste",
-                        isOn: Binding(
-                            get: { appState.postPasteLearningEnabled },
-                            set: { appState.postPasteLearningEnabled = $0 }
-                        )
-                    )
-
-                    if appState.postPasteLearningEnabled && !hasScreenRecordingPermission {
-                        ScreenRecordingRecoveryView {
-                            _ = PermissionChecker.requestScreenRecordingPermission()
-                            PermissionChecker.openScreenRecordingSettings()
-                            refreshScreenRecordingPermission()
-                        }
-                    }
-
-                    Text("Ghost Pepper uses high-quality OCR on the frontmost window and adds the result to the cleanup prompt. When learning is enabled, Ghost Pepper does a high-quality OCR check about 15 seconds after paste and only keeps narrow, high-confidence corrections.")
+                    Text("Every recording's frontmost window is OCR'd and saved into the lab archive, so future evaluations can judge OCR on vs off from the same clips; the preset decides whether cleanup sees it. Manual corrections after paste are always harvested into the corrections log and never auto-applied.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1132,44 +1061,6 @@ struct SettingsView: View {
         }
     }
 
-    private var recognizedVoicesSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Ghost Pepper auto-creates reusable voice prints from speaker-tagged lab reruns. Marking more than one voice print as \"This is me\" is allowed.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let recognizedVoicesErrorMessage {
-                Text(recognizedVoicesErrorMessage)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-            }
-
-            if recognizedVoices.isEmpty {
-                ContentUnavailableView(
-                    "No Recognized Voices",
-                    systemImage: "person.crop.circle.badge.questionmark",
-                    description: Text("Run speaker tagging in History to create reusable voice prints.")
-                )
-                .frame(maxWidth: .infinity, minHeight: 280)
-            } else {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(recognizedVoices) { profile in
-                        RecognizedVoiceProfileEditor(
-                            profile: profile,
-                            linkedSpeakerProfiles: recognizedVoiceSpeakerProfilesByID[profile.id] ?? [],
-                            onChange: { updatedProfile in
-                                upsertRecognizedVoiceProfile(updatedProfile)
-                            },
-                            onUnlinkSpeakerProfile: { speakerProfile in
-                                unlinkSpeakerProfileFromRecognizedVoice(speakerProfile)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
 
     @State private var isTranscriptionStageExpanded = true
     @State private var isDiarizationStageExpanded = true
@@ -1200,7 +1091,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, minHeight: 280)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(transcriptionLabController.filteredEntries) { entry in
                         HStack(alignment: .top, spacing: 8) {
                             Button {
@@ -1473,11 +1364,9 @@ struct SettingsView: View {
                                 recognizedVoiceID,
                                 for: profile.speakerID
                             )
-                            reloadRecognizedVoices()
                         },
                         onUpdateGlobalVoice: {
                             transcriptionLabController.pushSpeakerProfileToGlobalVoice(for: profile.speakerID)
-                            reloadRecognizedVoices()
                         }
                     )
                 }

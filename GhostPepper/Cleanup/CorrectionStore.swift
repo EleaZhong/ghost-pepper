@@ -12,18 +12,11 @@ struct MisheardReplacement: Codable, Equatable, Hashable, Sendable {
 }
 
 final class CorrectionStore: ObservableObject {
-    @Published private(set) var preferredTranscriptions: [String]
     @Published private(set) var commonlyMisheard: [MisheardReplacement]
-    @Published private(set) var preferredTranscriptionsDraft: String
     @Published private(set) var commonlyMisheardDraft: String
 
     var preferredOCRCustomWords: [String] {
         preferredTranscriptions
-    }
-
-    var preferredTranscriptionsText: String {
-        get { preferredTranscriptionsDraft }
-        set { updatePreferredTranscriptions(from: newValue) }
     }
 
     var commonlyMisheardText: String {
@@ -31,9 +24,10 @@ final class CorrectionStore: ObservableObject {
         set { updateCommonlyMisheard(from: newValue) }
     }
 
-    /// The measured starter glossary (voice-eval: mined from atlas + session transcripts,
-    /// reviewed by Elea, 2026-11-02). Feeds Whisper promptTokens, cleanup CORRECTION-HINTS,
-    /// and OCR customWords. User-editable in Settings once set.
+    /// The measured glossary (voice-eval: mined from atlas + session transcripts, reviewed
+    /// by Elea, 2026-11-02). THE list: feeds Whisper promptTokens and OCR customWords, and
+    /// cleanup CORRECTION-HINTS when a preset enables them. Not user-editable; new terms
+    /// arrive baked, from the eval loop (task:preset-fidelity).
     static let glossaryPreset: [String] = [
         "lapse",
         "flywheel",
@@ -115,27 +109,21 @@ final class CorrectionStore: ObservableObject {
         "LLM",
     ]
 
-    private static let preferredTranscriptionsDefaultsKey = "preferredTranscriptionsDraft"
     private static let commonlyMisheardDefaultsKey = "commonlyMisheardDraft"
 
     private let defaults: UserDefaults
 
+    /// The baked preset is the list; not user-editable (task:preset-fidelity).
+    var preferredTranscriptions: [String] {
+        Self.glossaryPreset
+    }
+
     init(defaults: UserDefaults = .standard) {
-        let preferredDraft = defaults.string(forKey: Self.preferredTranscriptionsDefaultsKey)
-            ?? Self.glossaryPreset.joined(separator: "\n")
         let commonlyMisheardDraft = defaults.string(forKey: Self.commonlyMisheardDefaultsKey) ?? ""
 
         self.defaults = defaults
-        self.preferredTranscriptionsDraft = preferredDraft
         self.commonlyMisheardDraft = commonlyMisheardDraft
-        self.preferredTranscriptions = Self.parsePreferredTranscriptions(from: preferredDraft)
         self.commonlyMisheard = Self.parseCommonlyMisheard(from: commonlyMisheardDraft)
-    }
-
-    func updatePreferredTranscriptions(from text: String) {
-        preferredTranscriptionsDraft = text
-        preferredTranscriptions = Self.parsePreferredTranscriptions(from: text)
-        persistPreferredTranscriptions()
     }
 
     func updateCommonlyMisheard(from text: String) {
@@ -154,10 +142,6 @@ final class CorrectionStore: ObservableObject {
         let line = "\(replacement.wrong) -> \(replacement.right)"
         let separator = commonlyMisheardDraft.isEmpty || commonlyMisheardDraft.hasSuffix("\n") ? "" : "\n"
         updateCommonlyMisheard(from: commonlyMisheardDraft + separator + line)
-    }
-
-    private func persistPreferredTranscriptions() {
-        defaults.set(preferredTranscriptionsDraft, forKey: Self.preferredTranscriptionsDefaultsKey)
     }
 
     private func persistCommonlyMisheard() {

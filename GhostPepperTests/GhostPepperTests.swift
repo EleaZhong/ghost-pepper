@@ -973,7 +973,6 @@ final class GhostPepperTests: XCTestCase {
             cleanupSettingsDefaults: defaults
         )
 
-        XCTAssertTrue(appState.postPasteLearningEnabled)
         XCTAssertTrue(appState.postPasteLearningCoordinator.learningEnabled)
     }
 
@@ -991,21 +990,6 @@ final class GhostPepperTests: XCTestCase {
         XCTAssertFalse(whisperState.isEnabled)
     }
 
-    func testAppStateUpdatePostPasteLearningPersistsAndUpdatesCoordinator() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-
-        appState.postPasteLearningEnabled = false
-
-        XCTAssertFalse(appState.postPasteLearningEnabled)
-        XCTAssertFalse(appState.postPasteLearningCoordinator.learningEnabled)
-        XCTAssertEqual(defaults.object(forKey: "postPasteLearningEnabled") as? Bool, false)
-    }
 
     func testAppStateDefaultsSoundsEnabled() throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
@@ -1761,7 +1745,6 @@ final class GhostPepperTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
         defaults.removePersistentDomain(forName: #function)
         let seededStore = CorrectionStore(defaults: defaults)
-        seededStore.preferredTranscriptionsText = "Ghost Pepper\nJesse"
         seededStore.commonlyMisheardText = "just see -> Jesse"
 
         let appState = AppState(
@@ -1770,7 +1753,7 @@ final class GhostPepperTests: XCTestCase {
             cleanupSettingsDefaults: defaults
         )
 
-        XCTAssertEqual(appState.correctionStore.preferredTranscriptions, ["Ghost Pepper", "Jesse"])
+        XCTAssertEqual(appState.correctionStore.preferredTranscriptions, CorrectionStore.glossaryPreset)
         XCTAssertEqual(
             appState.correctionStore.commonlyMisheard,
             [MisheardReplacement(wrong: "just see", right: "Jesse")]
@@ -1785,9 +1768,8 @@ final class GhostPepperTests: XCTestCase {
             chordBindingStore: ChordBindingStore(defaults: defaults),
             cleanupSettingsDefaults: defaults
         )
-        appState.correctionStore.preferredTranscriptionsText = "Ghost Pepper\nJesse"
 
-        XCTAssertEqual(appState.ocrCustomWords, ["Ghost Pepper", "Jesse"])
+        XCTAssertEqual(appState.ocrCustomWords, CorrectionStore.glossaryPreset)
     }
 
     func testAppStateLoadsLocalCleanupModelsWhenCleanupIsEnabled() throws {

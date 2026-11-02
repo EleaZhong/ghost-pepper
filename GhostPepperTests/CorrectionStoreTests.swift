@@ -3,7 +3,9 @@ import XCTest
 
 @MainActor
 final class CorrectionStoreTests: XCTestCase {
-    func testFreshStoreSeedsTheMeasuredGlossaryPreset() throws {
+
+
+    func testPreferredTranscriptionsReadTheBakedPreset() throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
         defaults.removePersistentDomain(forName: #function)
 
@@ -11,18 +13,7 @@ final class CorrectionStoreTests: XCTestCase {
 
         XCTAssertEqual(store.preferredTranscriptions, CorrectionStore.glossaryPreset)
         XCTAssertTrue(store.preferredTranscriptions.contains("recipipe"))
-    }
-
-    func testPreferredTranscriptionsRoundTripThroughStorePersistence() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-
-        let store = CorrectionStore(defaults: defaults)
-        store.preferredTranscriptionsText = "Ghost Pepper\nOpenAI"
-
-        let reloadedStore = CorrectionStore(defaults: defaults)
-
-        XCTAssertEqual(reloadedStore.preferredTranscriptions, ["Ghost Pepper", "OpenAI"])
+        XCTAssertEqual(store.preferredOCRCustomWords, CorrectionStore.glossaryPreset)
     }
 
     func testCommonlyMisheardRoundTripThroughStorePersistence() throws {
@@ -41,16 +32,6 @@ final class CorrectionStoreTests: XCTestCase {
                 MisheardReplacement(wrong: "just see", right: "Jesse")
             ]
         )
-    }
-
-    func testPreferredOCRCustomWordsMatchPreferredTranscriptions() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-
-        let store = CorrectionStore(defaults: defaults)
-        store.preferredTranscriptionsText = "Ghost Pepper\nJesse"
-
-        XCTAssertEqual(store.preferredOCRCustomWords, ["Ghost Pepper", "Jesse"])
     }
 
     func testCommonlyMisheardDraftPreservesIncompleteLine() throws {

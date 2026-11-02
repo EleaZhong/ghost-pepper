@@ -167,13 +167,10 @@ class AppState: ObservableObject {
             cleanupSettingsDefaults.set(cleanupBackend.rawValue, forKey: Self.cleanupBackendDefaultsKey)
         }
     }
-    @Published var frontmostWindowContextEnabled: Bool {
-        didSet {
-            cleanupSettingsDefaults.set(
-                frontmostWindowContextEnabled,
-                forKey: Self.frontmostWindowContextEnabledDefaultsKey
-            )
-        }
+    /// Whether cleanup sees the OCR window context — a preset property (ocrInCleanup),
+    /// not a user knob. Capture and lab archival run regardless.
+    var frontmostWindowContextEnabled: Bool {
+        DictationPreset.preset(for: dictationPresetID).ocrInCleanup
     }
     @Published var playSounds: Bool {
         didSet {
@@ -197,15 +194,6 @@ class AppState: ObservableObject {
     @Published private(set) var pushToTalkChord: KeyChord
     @Published private(set) var toggleToTalkChord: KeyChord
     @Published private(set) var pepperChatChord: KeyChord
-    @Published var postPasteLearningEnabled: Bool {
-        didSet {
-            cleanupSettingsDefaults.set(
-                postPasteLearningEnabled,
-                forKey: Self.postPasteLearningEnabledDefaultsKey
-            )
-            postPasteLearningCoordinator.learningEnabled = postPasteLearningEnabled
-        }
-    }
     @Published var ignoreOtherSpeakers: Bool {
         didSet {
             cleanupSettingsDefaults.set(
@@ -278,8 +266,6 @@ class AppState: ObservableObject {
     private var hotkeyMonitorStarted = false
 
     private static let cleanupBackendDefaultsKey = "cleanupBackend"
-    private static let frontmostWindowContextEnabledDefaultsKey = "frontmostWindowContextEnabled"
-    private static let postPasteLearningEnabledDefaultsKey = "postPasteLearningEnabled"
     private static let ignoreOtherSpeakersDefaultsKey = "ignoreOtherSpeakers"
     private static let playSoundsDefaultsKey = "playSounds"
     private static let alwaysAllowedPasteApplicationsDefaultsKey = "alwaysAllowedPasteApplications"
@@ -364,17 +350,6 @@ class AppState: ObservableObject {
         let storedCleanupBackend = CleanupBackendOption(
             rawValue: cleanupSettingsDefaults.string(forKey: Self.cleanupBackendDefaultsKey) ?? ""
         ) ?? .localModels
-        let storedFrontmostWindowContextEnabled = cleanupSettingsDefaults.bool(
-            forKey: Self.frontmostWindowContextEnabledDefaultsKey
-        )
-        let storedPostPasteLearningEnabled: Bool
-        if cleanupSettingsDefaults.object(forKey: Self.postPasteLearningEnabledDefaultsKey) == nil {
-            storedPostPasteLearningEnabled = true
-        } else {
-            storedPostPasteLearningEnabled = cleanupSettingsDefaults.bool(
-                forKey: Self.postPasteLearningEnabledDefaultsKey
-            )
-        }
         let storedIgnoreOtherSpeakers: Bool
         if cleanupSettingsDefaults.object(forKey: Self.ignoreOtherSpeakersDefaultsKey) == nil {
             storedIgnoreOtherSpeakers = false
@@ -384,8 +359,6 @@ class AppState: ObservableObject {
             )
         }
         self.cleanupBackend = storedCleanupBackend
-        self.frontmostWindowContextEnabled = storedFrontmostWindowContextEnabled
-        self.postPasteLearningEnabled = storedPostPasteLearningEnabled
         self.ignoreOtherSpeakers = storedIgnoreOtherSpeakers
         self.alwaysAllowedPasteApplications = Self.loadAlwaysAllowedPasteApplications(
             defaults: cleanupSettingsDefaults
@@ -403,7 +376,7 @@ class AppState: ObservableObject {
         )
         self.postPasteLearningCoordinator = PostPasteLearningCoordinator(
             correctionStore: self.correctionStore,
-            learningEnabled: storedPostPasteLearningEnabled,
+            learningEnabled: true,  // always harvest; application is preset-gated (task:preset-fidelity)
             revisit: { session in
                 await PostPasteLearningObservationProvider.captureObservation(
                     for: session
@@ -434,14 +407,6 @@ class AppState: ObservableObject {
         // `write_file` is finalized by the agent. We only count `.people` —
         // future index kinds would need their own counters or a separate
         cleanupSettingsDefaults.set(storedCleanupBackend.rawValue, forKey: Self.cleanupBackendDefaultsKey)
-        cleanupSettingsDefaults.set(
-            storedFrontmostWindowContextEnabled,
-            forKey: Self.frontmostWindowContextEnabledDefaultsKey
-        )
-        cleanupSettingsDefaults.set(
-            storedPostPasteLearningEnabled,
-            forKey: Self.postPasteLearningEnabledDefaultsKey
-        )
         cleanupSettingsDefaults.set(
             storedIgnoreOtherSpeakers,
             forKey: Self.ignoreOtherSpeakersDefaultsKey
@@ -748,11 +713,9 @@ class AppState: ObservableObject {
 
         do {
             await prepareRecordingSessionIfNeeded()
-            if cleanupEnabled && canAttemptCleanup && frontmostWindowContextEnabled {
-                recordingOCRPrefetch.start(customWords: ocrCustomWords)
-            } else {
-                recordingOCRPrefetch.cancel()
-            }
+            // OCR capture runs on every recording and is archived on the lab entry;
+            // the preset gates only whether cleanup sees it (task:preset-fidelity).
+            recordingOCRPrefetch.start(customWords: ocrCustomWords)
             if cleanupEnabled && canAttemptCleanup {
                 let promptComponents = activeCleanupPromptComponents(windowContext: nil)
                 textCleanupManager.startPromptPrefill(
@@ -1308,12 +1271,13 @@ class AppState: ObservableObject {
     }
 
     private func activeCleanupPromptComponents(windowContext: OCRContext?) -> CleanupPromptComponents {
-        cleanupPromptBuilder.buildPromptComponents(
+        let preset = DictationPreset.preset(for: dictationPresetID)
+        return cleanupPromptBuilder.buildPromptComponents(
             basePrompt: languageAwareCleanupPrompt,
-            windowContext: windowContext,
-            preferredTranscriptions: correctionStore.preferredTranscriptions,
-            commonlyMisheard: correctionStore.commonlyMisheard,
-            includeWindowContext: frontmostWindowContextEnabled
+            windowContext: preset.ocrInCleanup ? windowContext : nil,
+            preferredTranscriptions: preset.cleanupHints ? correctionStore.preferredTranscriptions : [],
+            commonlyMisheard: preset.cleanupHints ? correctionStore.commonlyMisheard : [],
+            includeWindowContext: preset.ocrInCleanup
         )
     }
 
