@@ -124,9 +124,7 @@ struct OnboardingView: View {
     let onComplete: () async -> Void
     @State private var currentStep = 1
 
-    private var completionStep: Int {
-        GranolaImporter.isInstalled ? 5 : 4
-    }
+    private let completionStep = 4
 
     var body: some View {
         VStack {
@@ -137,15 +135,9 @@ struct OnboardingView: View {
                 SetupStep(appState: appState, modelManager: appState.modelManager, onContinue: { currentStep = 3 })
             case 3:
                 TryItStep(appState: appState, onContinue: {
-                    currentStep = GranolaImporter.isInstalled ? 4 : completionStep
+                    currentStep = completionStep
                 })
             case 4:
-                if GranolaImporter.isInstalled {
-                    GranolaOnboardingStep(onContinue: { currentStep = completionStep })
-                } else {
-                    DoneStep(onComplete: completeOnboarding)
-                }
-            case 5:
                 DoneStep(onComplete: completeOnboarding)
             default:
                 EmptyView()
@@ -916,70 +908,6 @@ struct KeyCap: View {
                         : Color(nsColor: .controlBackgroundColor))
             )
             .animation(.easeInOut(duration: 0.2), value: isActive)
-    }
-}
-
-// MARK: - Step 4: Granola Import
-
-struct GranolaOnboardingStep: View {
-    let onContinue: () -> Void
-    @State private var showImporter = false
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-
-            Image(systemName: "square.and.arrow.down")
-                .font(.system(size: 46))
-                .foregroundStyle(.orange)
-
-            Text("Bring in Granola")
-                .font(.system(size: 28, weight: .bold))
-
-            Text("Ghost Pepper found Granola on this Mac. Import your past meetings to seed the second brain you control.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 42)
-
-            VStack(alignment: .leading, spacing: 8) {
-                BulletPoint("Turn existing meeting notes into local markdown")
-                BulletPoint("Use them for wiki generation and private Q&A")
-                BulletPoint("Keep the archive on your machine")
-            }
-            .padding(.horizontal, 48)
-
-            Spacer()
-
-            Button(action: { showImporter = true }) {
-                Text("Import Granola Meetings")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            .padding(.horizontal, 40)
-
-            Button("Skip for Now") {
-                onContinue()
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 24)
-        }
-        .sheet(isPresented: $showImporter, onDismiss: onContinue) {
-            GranolaImportSheet()
-        }
-    }
-}
-
-private struct GranolaImportSheet: View {
-    @StateObject private var importer = GranolaImporter()
-    @StateObject private var meetingState = MeetingWindowState()
-
-    var body: some View {
-        GranolaImportView(importer: importer, state: meetingState)
     }
 }
 

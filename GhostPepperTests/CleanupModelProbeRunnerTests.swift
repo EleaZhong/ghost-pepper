@@ -52,6 +52,7 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
     func testRunnerCapturesRawAndSanitizedStagesSeparately() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set("", forKey: "preferredTranscriptionsDraft")  // opt out of the glossary preset: these tests assert exact prompts
         defer { defaults.removePersistentDomain(forName: #function) }
 
         let runner = CleanupModelProbeRunner(
@@ -105,6 +106,7 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
     func testRunnerWrapsRawInputAndLeavesCorrectionHintsInPrompt() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set("", forKey: "preferredTranscriptionsDraft")  // opt out of the glossary preset: these tests assert exact prompts
         defer { defaults.removePersistentDomain(forName: #function) }
         let correctionStore = CorrectionStore(defaults: defaults)
         correctionStore.commonlyMisheardText = "chat gbt -> ChatGPT"
@@ -146,6 +148,7 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
     func testRunnerBuildsPromptWithOptionalWindowContext() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set("", forKey: "preferredTranscriptionsDraft")  // opt out of the glossary preset: these tests assert exact prompts
         defer { defaults.removePersistentDomain(forName: #function) }
 
         let runner = CleanupModelProbeRunner(
@@ -185,6 +188,7 @@ final class CleanupModelProbeRunnerTests: XCTestCase {
     func testRunnerLeavesPromptUnchangedForCompactCleanupModel() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set("", forKey: "preferredTranscriptionsDraft")  // opt out of the glossary preset: these tests assert exact prompts
         defer { defaults.removePersistentDomain(forName: #function) }
 
         let runner = CleanupModelProbeRunner(
