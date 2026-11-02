@@ -29,8 +29,7 @@ final class TranscriptionLabStoreTests: XCTestCase {
     func testStoreReturnsEntriesNewestFirst() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
 
         let olderEntry = makeEntry(
@@ -52,11 +51,10 @@ final class TranscriptionLabStoreTests: XCTestCase {
         XCTAssertEqual(entries.map(\.id), [newerEntry.id, olderEntry.id])
     }
 
-    func testStorePrunesOldestEntryWhenCapacityExceeded() throws {
+    func testStoreKeepsEveryEntryWithoutPruning() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 2
+            directoryURL: fixture.directoryURL
         )
 
         let firstEntry = makeEntry(
@@ -81,15 +79,15 @@ final class TranscriptionLabStoreTests: XCTestCase {
 
         let entries = try store.loadEntries()
 
-        XCTAssertEqual(entries.map(\.id), [thirdEntry.id, secondEntry.id])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.audioURL(named: "first.bin").path))
+        XCTAssertEqual(entries.map(\.id), [thirdEntry.id, secondEntry.id, firstEntry.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.audioURL(named: "first.bin").path))
+        XCTAssertEqual(try store.loadStageTimings().count, 3)
     }
 
     func testStoreLoadsEmptyArchiveWhenIndexDoesNotExist() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
 
         let entries = try store.loadEntries()
@@ -97,11 +95,10 @@ final class TranscriptionLabStoreTests: XCTestCase {
         XCTAssertTrue(entries.isEmpty)
     }
 
-    func testStorePrunesRecordingsThatDisplayAsZeroSecondsOnLoad() throws {
+    func testStoreHidesZeroSecondRecordingsWithoutDeletingThem() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
         let shortEntry = makeEntry(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000051")!,
@@ -135,21 +132,17 @@ final class TranscriptionLabStoreTests: XCTestCase {
         let entries = try store.loadEntries()
 
         XCTAssertEqual(entries.map(\.id), [visibleEntry.id])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.audioURL(named: shortEntry.audioFileName).path))
+        XCTAssertEqual(try store.loadAllEntries().map(\.id), [shortEntry.id, visibleEntry.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.audioURL(named: shortEntry.audioFileName).path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.audioURL(named: visibleEntry.audioFileName).path))
-        XCTAssertNil(try store.loadStageTimings()[shortEntry.id])
+        XCTAssertEqual(try store.loadStageTimings()[shortEntry.id], shortTiming)
         XCTAssertEqual(try store.loadStageTimings()[visibleEntry.id], visibleTiming)
-        XCTAssertEqual(
-            try JSONDecoder().decode([TranscriptionLabEntry].self, from: Data(contentsOf: indexURL)).map(\.id),
-            [visibleEntry.id]
-        )
     }
 
     func testStorePersistsStageTimingsForNewEntries() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
         let entry = makeEntry(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000021")!,
@@ -169,15 +162,13 @@ final class TranscriptionLabStoreTests: XCTestCase {
         )
     }
 
-    func testStoreDropsUnreadableEntryIndexWithoutPreservingOldEntries() throws {
+    func testStoreThrowsOnUnreadableEntryIndexAndLeavesItInPlace() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
         let legacyIndexURL = fixture.directoryURL.appendingPathComponent("transcription-lab-index.json")
-
-        try Data("""
+        let legacyIndexData = Data("""
         [
           {
             "id": "00000000-0000-0000-0000-000000000041",
@@ -191,17 +182,18 @@ final class TranscriptionLabStoreTests: XCTestCase {
             "cleanupUsedFallback": false
           }
         ]
-        """.utf8).write(to: legacyIndexURL)
+        """.utf8)
 
-        XCTAssertEqual(try store.loadEntries(), [])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: legacyIndexURL.path))
+        try legacyIndexData.write(to: legacyIndexURL)
+
+        XCTAssertThrowsError(try store.loadEntries())
+        XCTAssertEqual(try Data(contentsOf: legacyIndexURL), legacyIndexData)
     }
 
-    func testInsertRecoversFromUnreadableLegacyArchiveState() throws {
+    func testInsertThrowsOnUnreadableArchiveWithoutTouchingIt() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
         let indexURL = fixture.directoryURL.appendingPathComponent("transcription-lab-index.json")
         let timingsURL = fixture.directoryURL.appendingPathComponent("transcription-lab-timings.json")
@@ -212,13 +204,13 @@ final class TranscriptionLabStoreTests: XCTestCase {
         let entry = makeEntry(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000042")!,
             createdAt: Date(timeIntervalSince1970: 999),
-            audioFileName: "recovered.wav"
+            audioFileName: "unwritten.wav"
         )
 
-        try store.insert(entry, audioData: Data([0x01, 0x02]), stageTimings: makeStageTimings())
-
-        XCTAssertEqual(try store.loadEntries(), [entry])
-        XCTAssertEqual(try store.loadStageTimings()[entry.id], makeStageTimings())
+        XCTAssertThrowsError(try store.insert(entry, audioData: Data([0x01, 0x02]), stageTimings: makeStageTimings()))
+        XCTAssertEqual(try Data(contentsOf: indexURL), Data("not-json".utf8))
+        XCTAssertEqual(try Data(contentsOf: timingsURL), Data("still-not-json".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.audioURL(named: entry.audioFileName).path))
     }
 
     func testTranscriptionLabEntryRoundTripsDiarizationSummary() throws {
@@ -240,8 +232,7 @@ final class TranscriptionLabStoreTests: XCTestCase {
     func testTranscriptionLabStorePersistsDiarizationSummary() throws {
         let fixture = makeFixture()
         let store = TranscriptionLabStore(
-            directoryURL: fixture.directoryURL,
-            maxEntries: 50
+            directoryURL: fixture.directoryURL
         )
         let entry = makeEntry(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000032")!,

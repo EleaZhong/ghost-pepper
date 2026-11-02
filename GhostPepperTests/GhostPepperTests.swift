@@ -2512,7 +2512,7 @@ final class GhostPepperTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let storeDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let labStore = TranscriptionLabStore(directoryURL: storeDirectory, maxEntries: 50)
+        let labStore = TranscriptionLabStore(directoryURL: storeDirectory)
         let appState = AppState(
             hotkeyMonitor: FakeHotkeyMonitor(),
             chordBindingStore: ChordBindingStore(defaults: defaults),
@@ -2548,7 +2548,7 @@ final class GhostPepperTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let storeDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let labStore = TranscriptionLabStore(directoryURL: storeDirectory, maxEntries: 50)
+        let labStore = TranscriptionLabStore(directoryURL: storeDirectory)
         let appState = AppState(
             hotkeyMonitor: FakeHotkeyMonitor(),
             chordBindingStore: ChordBindingStore(defaults: defaults),
@@ -2581,7 +2581,7 @@ final class GhostPepperTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let storeDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let labStore = TranscriptionLabStore(directoryURL: storeDirectory, maxEntries: 50)
+        let labStore = TranscriptionLabStore(directoryURL: storeDirectory)
         let debugLogStore = makeDebugLogStore()
         let appState = AppState(
             hotkeyMonitor: FakeHotkeyMonitor(),
@@ -2612,7 +2612,7 @@ final class GhostPepperTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let storeDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let labStore = TranscriptionLabStore(directoryURL: storeDirectory, maxEntries: 50)
+        let labStore = TranscriptionLabStore(directoryURL: storeDirectory)
         let appState = AppState(
             hotkeyMonitor: FakeHotkeyMonitor(),
             chordBindingStore: ChordBindingStore(defaults: defaults),
@@ -2692,7 +2692,7 @@ final class GhostPepperTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let storeDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let labStore = TranscriptionLabStore(directoryURL: storeDirectory, maxEntries: 50)
+        let labStore = TranscriptionLabStore(directoryURL: storeDirectory)
         defer {
             try? FileManager.default.removeItem(at: storeDirectory)
         }
@@ -2808,7 +2808,7 @@ final class GhostPepperTests: XCTestCase {
         defaults.removePersistentDomain(forName: #function)
         let storeDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let labStore = TranscriptionLabStore(directoryURL: storeDirectory, maxEntries: 50)
+        let labStore = TranscriptionLabStore(directoryURL: storeDirectory)
         defer {
             try? FileManager.default.removeItem(at: storeDirectory)
         }
