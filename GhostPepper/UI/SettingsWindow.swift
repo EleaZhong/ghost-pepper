@@ -277,7 +277,6 @@ struct SettingsView: View {
             cachedSpeechModelNames: appState.modelManager.cachedModelNames,
             cleanupState: appState.textCleanupManager.state,
             selectedCleanupModelKind: appState.textCleanupManager.selectedCleanupModelKind,
-            selectedWikiModelKind: appState.selectedWikiModelKind,
             cachedCleanupKinds: appState.textCleanupManager.cachedModelKinds
         )
     }
@@ -619,8 +618,37 @@ struct SettingsView: View {
         }
     }
 
+    private var presetSection: some View {
+        SettingsCard("Preset") {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Preset", selection: Binding(
+                    get: { appState.dictationPresetID },
+                    set: { appState.applyPreset(DictationPreset.preset(for: $0)) }
+                )) {
+                    ForEach(DictationPreset.all) { preset in
+                        Text(preset.title).tag(preset.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 320, alignment: .leading)
+
+                Text(DictationPreset.preset(for: appState.dictationPresetID).summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Presets are baked from measurement (voice-eval). New presets arrive with new releases.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private var generalSection: some View {
         VStack(alignment: .leading, spacing: 24) {
+            presetSection
+
             if !hasAccessibilityPermission || !hasInputMonitoringPermission {
                 SettingsCard("Permissions") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -876,13 +904,13 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 24) {
             SettingsCard("Cleanup") {
                 VStack(alignment: .leading, spacing: 16) {
-                    Toggle(
-                        "Enable cleanup",
-                        isOn: Binding(
-                            get: { appState.cleanupEnabled },
-                            set: { appState.setCleanupEnabled($0) }
-                        )
-                    )
+                    HStack {
+                        Text(appState.cleanupEnabled ? "On" : "Off")
+                            .font(.body.weight(.medium))
+                        Text("· set by the preset")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
 
                     if appState.cleanupEnabled {
                         if appState.textCleanupManager.state == .error {
@@ -927,30 +955,6 @@ struct SettingsView: View {
                 }
             }
 
-            SettingsCard("Cleanup prompt") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Ghost Pepper uses this prompt before adding OCR context and correction hints.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    BorderedTextEditor(
-                        text: $appState.cleanupPrompt,
-                        minimumHeight: 140,
-                        maximumHeight: 260,
-                        monospaced: false
-                    )
-
-                    HStack {
-                        Spacer()
-
-                        Button("Reset to Default") {
-                            appState.cleanupPrompt = TextCleaner.defaultPrompt
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
 
             SettingsCard("Correction hints") {
                 VStack(alignment: .leading, spacing: 20) {
@@ -1028,19 +1032,10 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 24) {
             SettingsCard("Speech model") {
                 SettingsField("Active speech model") {
-                    Picker("Speech Model", selection: $appState.speechModel) {
-                        ForEach(ModelManager.availableModels) { model in
-                            Text(model.pickerLabel).tag(model.name)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 320, alignment: .leading)
-                    .onChange(of: appState.speechModel) { _, newModel in
-                        Task {
-                            await appState.loadSpeechModel(name: newModel)
-                        }
-                    }
+                    Text(ModelManager.availableModels.first { $0.name == appState.speechModel }?.pickerLabel ?? appState.speechModel)
+                        .foregroundStyle(.secondary)
                 }
+                .disabled(true)
 
                 Text("Ghost Pepper uses this model for speech recognition everywhere in the app.")
                     .font(.caption)
@@ -1089,25 +1084,10 @@ struct SettingsView: View {
 
             SettingsCard("Cleanup model") {
                 SettingsField("Active cleanup model") {
-                    Picker(
-                        "Cleanup model",
-                        selection: Binding(
-                            get: { appState.textCleanupManager.selectedCleanupModelKind },
-                            set: { appState.textCleanupManager.selectedCleanupModelKind = $0 }
-                        )
-                    ) {
-                        ForEach(TextCleanupManager.cleanupGenerationModels, id: \.kind) { model in
-                            Text(model.displayName).tag(model.kind)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 360, alignment: .leading)
-                    .onChange(of: appState.textCleanupManager.selectedCleanupModelKind) { _, _ in
-                        Task {
-                            await appState.textCleanupManager.loadModel()
-                        }
-                    }
+                    Text(TextCleanupManager.cleanupGenerationModels.first { $0.kind == appState.textCleanupManager.selectedCleanupModelKind }?.displayName ?? "none")
+                        .foregroundStyle(.secondary)
                 }
+                .disabled(true)
 
                 Text("Recommended cleanup models are marked Very fast, Fast, and Full.")
                     .font(.caption)
@@ -1115,28 +1095,6 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            SettingsCard("2nd Brain generation model") {
-                SettingsField("Default 2nd Brain model") {
-                    Picker(
-                        "2nd Brain model",
-                        selection: Binding(
-                            get: { appState.selectedWikiModelKind },
-                            set: { appState.selectedWikiModelKind = $0 }
-                        )
-                    ) {
-                        ForEach(TextCleanupManager.wikiGenerationModels, id: \.kind) { model in
-                            Text(model.displayName).tag(model.kind)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 420, alignment: .leading)
-                }
-
-                Text("2nd Brain generation can use a larger downloaded local model than live dictation cleanup. Gemma 4 12B MLX is the recommended target, but MLX inference support is still being wired in.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
             SettingsCard("Runtime models") {
                 VStack(alignment: .leading, spacing: 16) {

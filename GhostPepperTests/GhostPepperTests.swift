@@ -151,6 +151,28 @@ final class GhostPepperTests: XCTestCase {
         super.tearDown()
     }
 
+    func testApplyPresetSetsSpeechModelCleanupAndKind() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
+        defaults.removePersistentDomain(forName: #function)
+        let appState = AppState(
+            hotkeyMonitor: FakeHotkeyMonitor(),
+            chordBindingStore: ChordBindingStore(defaults: defaults),
+            cleanupSettingsDefaults: defaults
+        )
+
+        appState.applyPreset(.verbatim)
+
+        XCTAssertEqual(appState.dictationPresetID, "verbatim")
+        XCTAssertEqual(appState.speechModel, DictationPreset.verbatim.speechModelID)
+        XCTAssertFalse(appState.cleanupEnabled)
+
+        appState.applyPreset(.standard)
+
+        XCTAssertEqual(appState.dictationPresetID, "standard")
+        XCTAssertTrue(appState.cleanupEnabled)
+        XCTAssertEqual(appState.textCleanupManager.selectedCleanupModelKind, .qwen35_2b_q4_k_m)
+    }
+
     func testAppStateInitialStatus() {
         // AppState is @MainActor so we test basic enum
         XCTAssertEqual(AppStatus.ready.rawValue, "Ready")
@@ -1541,150 +1563,11 @@ final class GhostPepperTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(window.minSize.height, 680)
     }
 
-    func testPromptEditorHostsSwiftUIViaContentViewController() throws {
-        closeWindows(titled: "Edit Cleanup Prompt")
-        defer { closeWindows(titled: "Edit Cleanup Prompt") }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-        let controller = PromptEditorController()
 
-        controller.show(appState: appState)
 
-        let window = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-        defer { window.close() }
 
-        XCTAssertNotNil(window.contentViewController)
-    }
 
-    func testPromptEditorControllerReusesExistingWindow() throws {
-        closeWindows(titled: "Edit Cleanup Prompt")
-        defer { closeWindows(titled: "Edit Cleanup Prompt") }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-        let controller = PromptEditorController()
 
-        controller.show(appState: appState)
-        let firstWindow = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-
-        controller.show(appState: appState)
-        let secondWindow = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-        defer { secondWindow.close() }
-
-        XCTAssertTrue(firstWindow === secondWindow)
-    }
-
-    func testPromptEditorControllerDismissKeepsWindowReusable() throws {
-        closeWindows(titled: "Edit Cleanup Prompt")
-        defer { closeWindows(titled: "Edit Cleanup Prompt") }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-        let controller = PromptEditorController()
-
-        controller.show(appState: appState)
-        let firstWindow = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-
-        controller.dismiss()
-        XCTAssertFalse(firstWindow.isVisible)
-
-        controller.show(appState: appState)
-        let secondWindow = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-        defer { secondWindow.close() }
-
-        XCTAssertTrue(firstWindow === secondWindow)
-    }
-
-    func testPromptEditorControllerCloseButtonOrdersWindowOutWithoutClosing() throws {
-        closeWindows(titled: "Edit Cleanup Prompt")
-        defer { closeWindows(titled: "Edit Cleanup Prompt") }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-        let controller = PromptEditorController()
-
-        controller.show(appState: appState)
-        let window = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-
-        let shouldClose = controller.windowShouldClose(window)
-
-        XCTAssertFalse(shouldClose)
-        XCTAssertFalse(window.isVisible)
-    }
-
-    func testPromptEditorControllerDismissResignsFirstResponder() throws {
-        closeWindows(titled: "Edit Cleanup Prompt")
-        defer { closeWindows(titled: "Edit Cleanup Prompt") }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-        let controller = PromptEditorController()
-
-        controller.show(appState: appState)
-        let window = try XCTUnwrap(
-            NSApp.windows.first(where: { $0.title == "Edit Cleanup Prompt" && $0.isVisible })
-        )
-        let textView = NSTextView(frame: .zero)
-        window.contentView?.addSubview(textView)
-        XCTAssertTrue(window.makeFirstResponder(textView))
-
-        controller.dismiss()
-
-        XCTAssertFalse(window.firstResponder === textView)
-    }
-
-    func testAppStateShowPromptEditorReusesSingleWindow() throws {
-        closeWindows(titled: "Edit Cleanup Prompt")
-        defer { closeWindows(titled: "Edit Cleanup Prompt") }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
-        defaults.removePersistentDomain(forName: #function)
-        let appState = AppState(
-            hotkeyMonitor: FakeHotkeyMonitor(),
-            chordBindingStore: ChordBindingStore(defaults: defaults),
-            cleanupSettingsDefaults: defaults
-        )
-
-        appState.showPromptEditor()
-        appState.showPromptEditor()
-
-        let windows = NSApp.windows.filter { $0.title == "Edit Cleanup Prompt" && $0.isVisible }
-        defer { windows.forEach { $0.close() } }
-
-        XCTAssertEqual(windows.count, 1)
-    }
 
     func testAppStateShowSettingsReusesSingleWindow() throws {
         closeWindows(titled: "Ghost Pepper Settings")
