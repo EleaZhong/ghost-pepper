@@ -42,6 +42,7 @@ Ghost Pepper uses open-source models that run entirely on your Mac. Models downl
 | Whisper tiny.en | ~75 MB | Fastest, English only |
 | **Whisper small.en** (default) | ~466 MB | Best accuracy, English only |
 | Whisper small (multilingual) | ~466 MB | Multi-language support |
+| Whisper large-v3 turbo (8-bit) | ~632 MB | Highest English accuracy, multilingual |
 | Parakeet v3 (25 languages) | ~1.4 GB | Multi-language via [FluidAudio](https://github.com/FluidInference/FluidAudio) |
 | Qwen3-ASR 0.6B int8 (50+ languages) | ~900 MB | Highest multilingual quality, macOS 15+ required |
 | Nemotron Speech Streaming 0.6B 8-bit | ~633 MB | Low-latency English streaming via [MLX Audio](https://github.com/Blaizzy/mlx-audio-swift) |

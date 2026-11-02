@@ -13,11 +13,13 @@ final class SpeechTranscriberTests: XCTestCase {
             "openai_whisper-tiny.en",
             "openai_whisper-small.en",
             "openai_whisper-small",
+            "openai_whisper-large-v3-v20240930_turbo_632MB",
             "fluid_parakeet-v3",
             "mlx_nemotron-speech-streaming-en-0.6b-8bit",
             "mlx_nemotron-3.5-asr-streaming-0.6b-8bit",
         ]
         var expectedBackends: [SpeechBackendKind] = [
+            .whisperKit,
             .whisperKit,
             .whisperKit,
             .whisperKit,
