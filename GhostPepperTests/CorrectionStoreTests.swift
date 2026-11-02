@@ -3,6 +3,16 @@ import XCTest
 
 @MainActor
 final class CorrectionStoreTests: XCTestCase {
+    func testFreshStoreSeedsTheMeasuredGlossaryPreset() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
+        defaults.removePersistentDomain(forName: #function)
+
+        let store = CorrectionStore(defaults: defaults)
+
+        XCTAssertEqual(store.preferredTranscriptions, CorrectionStore.glossaryPreset)
+        XCTAssertTrue(store.preferredTranscriptions.contains("recipipe"))
+    }
+
     func testPreferredTranscriptionsRoundTripThroughStorePersistence() throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: #function))
         defaults.removePersistentDomain(forName: #function)

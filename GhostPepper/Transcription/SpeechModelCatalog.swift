@@ -188,7 +188,7 @@ enum SpeechModelCatalog {
         return models
     }
 
-    static let defaultModelID = whisperSmallEnglish.id
+    static let defaultModelID = whisperLargeV3Turbo.id  // measured best local on the voice-eval gold (turbo-noloop 5.4% corpus WER)
 
     static var whisperModels: [SpeechModelDescriptor] {
         availableModels.filter { $0.backend == .whisperKit }

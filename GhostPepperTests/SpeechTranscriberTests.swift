@@ -39,7 +39,7 @@ final class SpeechTranscriberTests: XCTestCase {
 
         XCTAssertEqual(ids, expectedIDs)
         XCTAssertEqual(backends, expectedBackends)
-        XCTAssertEqual(SpeechModelCatalog.defaultModelID, "openai_whisper-small.en")
+        XCTAssertEqual(SpeechModelCatalog.defaultModelID, "openai_whisper-large-v3-v20240930_turbo_632MB")
     }
 
     func testNemotronDescriptorsUseMLXStreamingRepositories() {
@@ -133,7 +133,7 @@ final class SpeechTranscriberTests: XCTestCase {
 
     func testModelManagerDefaultModelName() {
         let manager = ModelManager()
-        XCTAssertEqual(manager.modelName, "openai_whisper-small.en")
+        XCTAssertEqual(manager.modelName, "openai_whisper-large-v3-v20240930_turbo_632MB")
     }
 
     func testModelManagerCustomModelName() {
