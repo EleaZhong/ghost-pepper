@@ -1113,6 +1113,7 @@ final class MeetingTranscriptWindowController: NSObject, NSWindowDelegate {
                 state.addRecordingTab(session: session)
             }
             updateWindowLevel()
+            WindowActivationCoordinator.begin(for: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -1172,7 +1173,7 @@ final class MeetingTranscriptWindowController: NSObject, NSWindowDelegate {
         window.contentViewController = NSHostingController(rootView: view)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.hidesOnDeactivate = false
-        NSApp.setActivationPolicy(.regular)
+        WindowActivationCoordinator.begin(for: window)
         window.setFrame(NSRect(x: screenFrame.midX - windowWidth / 2, y: screenFrame.minY, width: windowWidth, height: windowHeight), display: true)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -1186,7 +1187,7 @@ final class MeetingTranscriptWindowController: NSObject, NSWindowDelegate {
         self.window = nil
         windowState?.onRecordingStateChanged = nil
         windowState = nil
-        NSApp.setActivationPolicy(.accessory)
+        WindowActivationCoordinator.end(for: window)
     }
 
     /// Request a recording — shows consent dialog first (or starts immediately if user opted out).
@@ -1202,7 +1203,7 @@ final class MeetingTranscriptWindowController: NSObject, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
-        NSApp.setActivationPolicy(.accessory)
+        WindowActivationCoordinator.end(for: sender)
         return false
     }
 
@@ -9668,6 +9669,14 @@ struct MeetingSidebarView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Show in Finder")
+
+                Button(action: { state.onOpenSettings?() }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Settings")
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
